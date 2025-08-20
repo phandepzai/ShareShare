@@ -1,0 +1,10 @@
+D:\DEV\Share File\bin\Release\Share File.exe.config
+D:\DEV\Share File\bin\Release\Share File.exe
+D:\DEV\Share File\bin\Release\Share File.pdb
+D:\DEV\Share File\obj\Release\Share File.csproj.AssemblyReference.cache
+D:\DEV\Share File\obj\Release\ShareFile.MainForm.resources
+D:\DEV\Share File\obj\Release\Share_File.Properties.Resources.resources
+D:\DEV\Share File\obj\Release\Share File.csproj.GenerateResource.cache
+D:\DEV\Share File\obj\Release\Share File.csproj.CoreCompileInputs.cache
+D:\DEV\Share File\obj\Release\Share File.exe
+D:\DEV\Share File\obj\Release\Share File.pdb
