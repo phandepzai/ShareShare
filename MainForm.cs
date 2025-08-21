@@ -15,6 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Drawing;
+using System.Web;
 
 namespace ShareFile
 {
@@ -134,7 +135,7 @@ namespace ShareFile
             btnStop.Enabled = false;
 
             // HIỂN THỊ DÒNG NÀY TRƯỚC
-            UpdateLog("Coder: ©Nông Văn Phấn"); 
+            UpdateLog("Coder: ©Nông Văn Phấn");
 
             // Đảm bảo ngăn sleep đã được kích hoạt nhưng KHÔNG hiển thị log
             if (!_preventSleep)
@@ -145,7 +146,7 @@ namespace ShareFile
             // HIỂN THỊ DÒNG NÀY SAU
             UpdateLog("Đã kích hoạt chế độ ngăn máy tính sleep");
             notifyIcon.Text = "Ứng dụng chia sẻ file đã sẵn sàng";
-            
+
             //TỰ ĐỘNG BẮT ĐẦU CHIA SẺ NGAY KHI MỞ APP
             btnStart.PerformClick();
         }
@@ -506,7 +507,7 @@ namespace ShareFile
             if (context.Request.HttpMethod == "POST" &&
                 string.Equals(relativePath, "/upload", StringComparison.OrdinalIgnoreCase))
             {
-                await HandleFileUploadBinary(context);
+                await HandleFileUpload(context);
                 return;
             }
 
@@ -707,477 +708,14 @@ namespace ShareFile
             return Uri.UnescapeDataString(decoded);
         }
 
-
-        //Phương thức trang giao diện Upload
-        private string GenerateUploadPageHtml()
-        {
-            var sb = new StringBuilder();
-            sb.Append("<!DOCTYPE html><html lang=\"vi\"><head>");
-            sb.Append("<meta charset='UTF-8'>");
-            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
-            sb.Append("<title>Tải lên tập tin</title>");
-            sb.Append("<style>");
-            sb.Append("body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;margin:0;padding:20px;}");
-            sb.Append(".upload-card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);max-width:500px;margin:40px auto;padding:30px;text-align:center;}");
-            sb.Append(".upload-card h2{margin:0 0 10px;color:#333;}");
-            sb.Append(".upload-box{border:2px dashed #bbb;border-radius:6px;padding:25px;cursor:pointer;color:#666;}");
-            sb.Append("#fileList{margin-top:15px;text-align:left;max-height:200px;overflow-y:auto;font-size:14px;}");
-            sb.Append("#fileList div{padding:6px;border-bottom:1px solid #eee;}");
-            sb.Append(".btn{background:#4CAF50;color:#fff;border:none;padding:10px 20px;margin-top:15px;border-radius:4px;cursor:pointer;}");
-            sb.Append(".btn:disabled{background:#ccc;cursor:not-allowed;}");
-            sb.Append(".progress{height:8px;background:#eee;border-radius:4px;margin-top:10px;display:none;}");
-            sb.Append(".progress-bar{height:8px;background:#4CAF50;width:0;border-radius:4px;}");
-            sb.Append("</style></head><body>");
-            sb.Append("<div class='upload-card'>");
-            sb.Append("<h2>Tải lên tập tin</h2>");
-            sb.Append("<div class='upload-box' onclick=\"document.getElementById('fileInput').click();\">Bấm vào đây để chọn file</div>");
-            sb.Append("<input type='file' id='fileInput' multiple style='display:none'>");
-            sb.Append("<div id='fileList'></div>");
-            sb.Append("<button id='submitBtn' class='btn' disabled>Bắt đầu tải lên</button>");
-            sb.Append("<div class='progress'><div id='progressBar' class='progress-bar'></div></div>");
-            sb.Append("</div>");
-            sb.Append("<script>");
-            sb.Append("var fileInput=document.getElementById('fileInput');");
-            sb.Append("var fileList=document.getElementById('fileList');");
-            sb.Append("var submitBtn=document.getElementById('submitBtn');");
-            sb.Append("var progress=document.querySelector('.progress');");
-            sb.Append("var progressBar=document.getElementById('progressBar');");
-            sb.Append("fileInput.addEventListener('change',function(){fileList.innerHTML='';if(fileInput.files.length>0){for(var i=0;i<fileInput.files.length;i++){var div=document.createElement('div');div.textContent=fileInput.files[i].name;fileList.appendChild(div);}submitBtn.disabled=false;}else{submitBtn.disabled=true;}});");
-            sb.Append("submitBtn.addEventListener('click',function(){if(fileInput.files.length==0)return;var formData=new FormData();for(var i=0;i<fileInput.files.length;i++){formData.append('files[]',fileInput.files[i]);}var xhr=new XMLHttpRequest();xhr.open('POST','/upload',true);xhr.upload.onprogress=function(e){if(e.lengthComputable){progress.style.display='block';var percent=e.loaded/e.total*100;progressBar.style.width=percent+'%';}};xhr.onload=function(){document.open();document.write(xhr.responseText);document.close();};xhr.send(formData);});");
-            sb.Append("</script></body></html>");
-            return sb.ToString();
-        }
-
-
-        private string GenerateSuccessPageHtml(IEnumerable<string> successFiles, IEnumerable<string> failedFiles)
-        {
-            var sb = new StringBuilder();
-            sb.Append("<!DOCTYPE html><html lang='vi'><head>");
-            sb.Append("<meta charset='UTF-8'>");
-            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
-            sb.Append("<title>Kết quả tải lên</title>");
-            sb.Append("<style>");
-            sb.Append("body{font-family:'Segoe UI',Arial,sans-serif;background:#f0f2f5;margin:0;padding:20px;}");
-            sb.Append(".card{background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.1);max-width:500px;margin:40px auto;padding:25px;text-align:center;}");
-            sb.Append(".file-list{text-align:left;margin-top:15px;border:1px solid #ddd;padding:10px;border-radius:5px;max-height:250px;overflow-y:auto;}");
-            sb.Append(".file-item{padding:6px 0;border-bottom:1px solid #eee;}");
-            sb.Append(".file-item:last-child{border-bottom:none;}");
-            sb.Append(".btn{background:#4CAF50;color:white;text-decoration:none;padding:8px 15px;margin-top:15px;display:inline-block;border-radius:4px;}");
-            sb.Append(".btn-home{background:#007BFF;margin-left:10px;}");
-            sb.Append("</style></head><body>");
-            sb.Append("<div class='card'>");
-            sb.Append("<h2>✔ Kết quả tải lên</h2>");
-
-            if (successFiles != null && successFiles.Any())
-            {
-                sb.Append($"<p style='color:green'>Thành công: {successFiles.Count()} file</p>");
-                sb.Append("<div class='file-list'>");
-                foreach (var file in successFiles)
-                {
-                    var href = "/" + SafeEncode(file); // ← Sử dụng SafeEncode
-                    sb.Append($"<div class='file-item' style='color:green'>✔ <a href='{href}'>{WebUtility.HtmlEncode(file)}</a></div>");
-                }
-                sb.Append("</div>");
-            }
-
-            if (failedFiles != null && failedFiles.Any())
-            {
-                sb.Append($"<p style='color:#d9534f;margin-top:20px;'>Thất bại: {failedFiles.Count()} file</p>");
-                sb.Append("<div class='file-list'>");
-                foreach (var file in failedFiles)
-                {
-                    sb.Append($"<div class='file-item' style='color:red'>✗ {WebUtility.HtmlEncode(file)}</div>");
-                }
-                sb.Append("</div>");
-            }
-
-            sb.Append("<a href='/upload' class='btn'>Tải thêm</a>");
-            sb.Append("<a href='/' class='btn btn-home'>Trang chủ</a>");
-            sb.Append("</div></body></html>");
-            return sb.ToString();
-        }
-
-        // Trang báo lỗi upload
-        private string GenerateErrorPageHtml(string errorMessage)
-        {
-            var htmlBuilder = new StringBuilder();
-            htmlBuilder.Append("<!DOCTYPE html>");
-            htmlBuilder.Append("<html lang=\"vi\">");
-            htmlBuilder.Append("<head>");
-            htmlBuilder.Append("    <meta charset=\"UTF-8\">");
-            htmlBuilder.Append("    <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\">");
-            htmlBuilder.Append("    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-            htmlBuilder.Append("    <title>Lỗi Upload</title>");
-            htmlBuilder.Append("    <style>");
-            htmlBuilder.Append("        body { font-family: Arial, sans-serif; background-color: #f8d7da; margin: 0; padding: 0; }");
-            htmlBuilder.Append("        .container { max-width: 600px; margin: 50px auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }");
-            htmlBuilder.Append("        h2 { color: #721c24; }");
-            htmlBuilder.Append("        p { color: #721c24; font-size: 16px; }");
-            htmlBuilder.Append("        a { display:inline-block; margin-top:20px; padding:10px 15px; background:#721c24; color:#fff; text-decoration:none; border-radius:4px; }");
-            htmlBuilder.Append("        a:hover { background:#501214; }");
-            htmlBuilder.Append("    </style>");
-            htmlBuilder.Append("</head>");
-            htmlBuilder.Append("<body>");
-            htmlBuilder.Append("    <div class=\"container\">");
-            htmlBuilder.Append("        <h2>❌ Có lỗi xảy ra khi upload</h2>");
-            htmlBuilder.Append($"        <p>{System.Net.WebUtility.HtmlEncode(errorMessage)}</p>");
-            htmlBuilder.Append("        <a href=\"/\">Quay lại</a>");
-            htmlBuilder.Append("    </div>");
-            htmlBuilder.Append("</body>");
-            htmlBuilder.Append("</html>");
-            return htmlBuilder.ToString();
-        }
-
-
-        private async Task HandleFileUploadBinary(HttpListenerContext context)
-        {
-            string clientIp = context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown";
-            var uploadedFiles = new List<string>();
-            var failedFiles = new List<string>();
-
-            try
-            {
-                var request = context.Request;
-                if (!request.HasEntityBody)
-                {
-                    await SendErrorResponse(context, 400, "Không có dữ liệu tải lên.");
-                    UpdateLog($"[{clientIp}] Không có dữ liệu tải lên.");
-                    return;
-                }
-
-                string boundary = GetBoundary(request.ContentType);
-                if (string.IsNullOrEmpty(boundary))
-                {
-                    await SendErrorResponse(context, 400, "Thiếu boundary trong Content-Type.");
-                    UpdateLog($"[{clientIp}] Thiếu boundary trong Content-Type.");
-                    return;
-                }
-
-                // Đọc và xử lý dữ liệu multipart
-                using (var input = request.InputStream)
-                {
-                    byte[] boundaryBytes = Encoding.UTF8.GetBytes("--" + boundary);
-                    byte[] endBoundaryBytes = Encoding.UTF8.GetBytes("--" + boundary + "--");
-                    byte[] buffer = new byte[256 * 1024];
-                    MemoryStream currentPart = new MemoryStream();
-                    bool inFile = false;
-                    string currentFileName = null;
-                    FileStream currentFileStream = null;
-                    Dictionary<string, string> headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-                    while (true)
-                    {
-                        int bytesRead = await input.ReadAsync(buffer, 0, buffer.Length);
-                        if (bytesRead == 0) break;
-
-                        await currentPart.WriteAsync(buffer, 0, bytesRead);
-
-                        // Xử lý dữ liệu đã đọc
-                        byte[] data = currentPart.ToArray();
-                        int boundaryIndex = IndexOf(data, boundaryBytes, 0);
-                        int endBoundaryIndex = IndexOf(data, endBoundaryBytes, 0);
-
-                        // Nếu tìm thấy boundary, xử lý phần dữ liệu hiện tại
-                        if (boundaryIndex >= 0 || endBoundaryIndex >= 0)
-                        {
-                            int cutIndex = (boundaryIndex >= 0) ? boundaryIndex : endBoundaryIndex;
-                            byte[] partData = new byte[cutIndex];
-                            Array.Copy(data, 0, partData, 0, cutIndex);
-
-                            // Xử lý phần dữ liệu
-                            if (inFile && currentFileStream != null && partData.Length > 0)
-                            {
-                                // Tìm phần đầu của dữ liệu file (sau headers)
-                                int headerEnd = FindHeaderEnd(partData);
-                                if (headerEnd >= 0)
-                                {
-                                    int dataStart = headerEnd + 4; // \r\n\r\n
-                                    if (dataStart < partData.Length)
-                                    {
-                                        await currentFileStream.WriteAsync(partData, dataStart, partData.Length - dataStart);
-                                    }
-                                }
-                                else if (partData.Length > 0)
-                                {
-                                    // Nếu không tìm thấy header end, ghi toàn bộ dữ liệu
-                                    await currentFileStream.WriteAsync(partData, 0, partData.Length);
-                                }
-
-                                currentFileStream.Close();
-                                currentFileStream.Dispose();
-                                uploadedFiles.Add(currentFileName);
-                                UpdateLog($"[{clientIp}] Đã upload thành công: {currentFileName}");
-                                inFile = false;
-                            }
-
-                            // Parse headers cho phần mới
-                            if (cutIndex > 0)
-                            {
-                                headers.Clear();
-                                ParseHeaders(partData, headers);
-
-                                if (headers.ContainsKey("Content-Disposition") &&
-                                    headers["Content-Disposition"].Contains("filename="))
-                                {
-                                    string fileName = ExtractFileNameFromContentDisposition(headers["Content-Disposition"]);
-                                    if (!string.IsNullOrEmpty(fileName))
-                                    {
-                                        string uploadDir = Path.Combine(_sharedFolderPath, "Uploads");
-                                        if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
-
-                                        string safeFileName = GetUniqueFilename(uploadDir, fileName);
-                                        string savePath = Path.Combine(uploadDir, safeFileName);
-
-                                        try
-                                        {
-                                            currentFileStream = new FileStream(
-                                                savePath,
-                                                FileMode.Create,
-                                                FileAccess.Write,
-                                                FileShare.None,
-                                                8192,
-                                                FileOptions.Asynchronous);
-
-                                            currentFileName = safeFileName;
-                                            inFile = true;
-
-                                            // Ghi phần dữ liệu sau header (nếu có)
-                                            int headerEnd = FindHeaderEnd(partData);
-                                            if (headerEnd >= 0)
-                                            {
-                                                int dataStart = headerEnd + 4;
-                                                if (dataStart < partData.Length)
-                                                {
-                                                    await currentFileStream.WriteAsync(partData, dataStart, partData.Length - dataStart);
-                                                }
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            failedFiles.Add(fileName);
-                                            UpdateLog($"[{clientIp}] Lỗi khi tạo file {fileName}: {ex.Message}", true);
-                                            inFile = false;
-                                            currentFileStream?.Dispose();
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Giữ lại phần dữ liệu sau boundary
-                            int remainingStart = cutIndex + boundaryBytes.Length;
-                            int remainingLength = data.Length - remainingStart;
-                            byte[] remainingData = new byte[remainingLength];
-                            Array.Copy(data, remainingStart, remainingData, 0, remainingLength);
-
-                            currentPart.Dispose();
-                            currentPart = new MemoryStream();
-                            if (remainingLength > 0)
-                            {
-                                await currentPart.WriteAsync(remainingData, 0, remainingLength);
-                            }
-
-                            // Nếu là end boundary, thoát
-                            if (endBoundaryIndex >= 0) break;
-                        }
-                    }
-
-                    // Xử lý phần dữ liệu cuối cùng
-                    if (inFile && currentFileStream != null)
-                    {
-                        byte[] finalData = currentPart.ToArray();
-                        if (finalData.Length > 0)
-                        {
-                            // Tìm và cắt bỏ end boundary nếu có
-                            int endBoundaryPos = IndexOf(finalData, endBoundaryBytes, 0);
-                            if (endBoundaryPos >= 0)
-                            {
-                                await currentFileStream.WriteAsync(finalData, 0, endBoundaryPos);
-                            }
-                            else
-                            {
-                                await currentFileStream.WriteAsync(finalData, 0, finalData.Length);
-                            }
-                        }
-
-                        currentFileStream.Close();
-                        uploadedFiles.Add(currentFileName);
-                        UpdateLog($"[{clientIp}] Đã upload thành công: {currentFileName}");
-                    }
-
-                    currentPart.Dispose();
-                }
-
-                // Gửi response thành công
-                await SendSuccessResponse(context, uploadedFiles, failedFiles);
-            }
-            catch (Exception ex)
-            {
-                await SendErrorResponse(context, 500, "Lỗi khi upload: " + ex.Message);
-                UpdateLog($"[{clientIp}] Lỗi khi upload: {ex.Message}", true);
-            }
-        }
-
-        // Thêm phương thức ParseHeaders
-        private void ParseHeaders(byte[] data, Dictionary<string, string> headers)
-        {
-            string headerText = Encoding.UTF8.GetString(data);
-            string[] lines = headerText.Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
-
-            foreach (string line in lines)
-            {
-                int colonIndex = line.IndexOf(':');
-                if (colonIndex > 0)
-                {
-                    string key = line.Substring(0, colonIndex).Trim();
-                    string value = line.Substring(colonIndex + 1).Trim();
-                    headers[key] = value;
-                }
-            }
-        }
-
-        // Thêm phương thức này vào class
-        private int FindHeaderEnd(byte[] data)
-        {
-            // Tìm vị trí của \r\n\r\n (ký tự kết thúc header)
-            for (int i = 0; i < data.Length - 3; i++)
-            {
-                if (data[i] == 0x0D && data[i + 1] == 0x0A &&
-                    data[i + 2] == 0x0D && data[i + 3] == 0x0A)
-                {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        private async Task SendErrorResponse(HttpListenerContext context, int statusCode, string message)
-        {
-            var errHtml = GenerateErrorPageHtml(message);
-            var buf = Encoding.UTF8.GetBytes(errHtml);
-            context.Response.StatusCode = statusCode;
-            context.Response.ContentType = "text/html; charset=UTF-8";
-            context.Response.ContentLength64 = buf.LongLength;
-            await context.Response.OutputStream.WriteAsync(buf, 0, buf.Length);
-            context.Response.OutputStream.Close();
-        }
-
-        private async Task SendSuccessResponse(HttpListenerContext context, List<string> successFiles, List<string> failedFiles)
-        {
-            var okHtml = GenerateSuccessPageHtml(successFiles, failedFiles);
-            var okBuf = Encoding.UTF8.GetBytes(okHtml);
-            context.Response.ContentType = "text/html; charset=UTF-8";
-            context.Response.ContentLength64 = okBuf.LongLength;
-            await context.Response.OutputStream.WriteAsync(okBuf, 0, okBuf.Length);
-            context.Response.OutputStream.Close();
-        }
-
-        // Tìm mảng con trong mảng byte
-        private int IndexOf(byte[] searchIn, byte[] searchBytes, int startIndex)
-        {
-            for (int i = startIndex; i <= searchIn.Length - searchBytes.Length; i++)
-            {
-                bool found = true;
-                for (int j = 0; j < searchBytes.Length; j++)
-                {
-                    if (searchIn[i + j] != searchBytes[j]) { found = false; break; }
-                }
-                if (found) return i;
-            }
-            return -1;
-        }
-
-        // Lấy boundary từ Content-Type
-        private string GetBoundary(string contentType)
-        {
-            if (string.IsNullOrEmpty(contentType)) return null;
-            foreach (var part in contentType.Split(';'))
-            {
-                var t = part.Trim();
-                if (t.StartsWith("boundary=", StringComparison.OrdinalIgnoreCase))
-                    return t.Substring("boundary=".Length).Trim('"');
-            }
-            return null;
-        }
-
-        // Parse tên file từ header Content-Disposition (hỗ trợ cả filename*=?)
-        private string ExtractFileNameFromContentDisposition(string headerText)
-        {
-            // filename*=
-            int idxStar = headerText.IndexOf("filename*=", StringComparison.OrdinalIgnoreCase);
-            if (idxStar >= 0)
-            {
-                int start = idxStar + 10;
-                // lấy đến hết dòng
-                int lineEnd = headerText.IndexOf("\r\n", start);
-                string val = (lineEnd > start ? headerText.Substring(start, lineEnd - start) : headerText.Substring(start)).Trim();
-                // Ví dụ: UTF-8''Screenshot%202024-12-15.png
-                int apos = val.IndexOf("''", StringComparison.Ordinal);
-                if (apos > 0)
-                {
-                    string encodedName = val.Substring(apos + 2);
-                    return Uri.UnescapeDataString(encodedName).Trim('"');
-                }
-            }
-
-            // filename="..."
-            int idx = headerText.IndexOf("filename=\"", StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                int start = idx + 10;
-                int end = headerText.IndexOf("\"", start);
-                if (end > start) return headerText.Substring(start, end - start);
-            }
-
-            // filename=không_dấu_ngoặc
-            idx = headerText.IndexOf("filename=", StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                int start = idx + 9;
-                int lineEnd = headerText.IndexOf("\r\n", start);
-                string raw = (lineEnd > start ? headerText.Substring(start, lineEnd - start) : headerText.Substring(start)).Trim();
-                return raw.Trim('"');
-            }
-
-            return null;
-        }
-
-        // Làm sạch tên file (loại ký tự cấm Windows) + tránh trùng
-        private string GetSafeFilename(string filename)
-        {
-            if (string.IsNullOrEmpty(filename)) return "unknown";
-            string normalized = filename.Normalize(NormalizationForm.FormC);
-            return string.Concat(normalized.Split(Path.GetInvalidFileNameChars()));
-        }
-
-        private string GetUniqueFilename(string folder, string filename)
-        {
-            string safeName = GetSafeFilename(filename);
-            string name = Path.GetFileNameWithoutExtension(safeName);
-            string ext = Path.GetExtension(safeName);
-            string candidate = safeName;
-            int i = 1;
-            while (File.Exists(Path.Combine(folder, candidate)))
-            {
-                candidate = $"{name}_{i}{ext}";
-                i++;
-            }
-            return candidate;
-        }
-
-
-      
-
-
-
         public class MultipartParser
         {
-            private Stream _stream;
-            private byte[] _boundaryBytes;
-            private byte[] _boundaryEndBytes;
-            private bool _isFirstPart = true;
+            private readonly Stream _stream;
+            private readonly byte[] _boundaryBytes;
+            private readonly byte[] _boundaryEndBytes;
             private readonly MainForm _mainForm;
             private readonly Queue<byte> _pushback = new Queue<byte>();
-
+            private bool _isFirstPart = true;
 
             public string Filename { get; private set; }
             public string ContentType { get; private set; }
@@ -1190,32 +728,41 @@ namespace ShareFile
                 _mainForm = mainForm;
             }
 
-            // Đọc phần tiếp theo của dữ liệu multipart
             public bool ReadNextPart()
             {
+                _mainForm.UpdateLog($"[MultipartParser] Đang đọc phần tiếp theo...");
                 if (_isFirstPart)
                 {
-                    if (!SkipBoundary()) return false;
+                    if (!SkipBoundary())
+                    {
+                        _mainForm.UpdateLog($"[MultipartParser] Không tìm thấy boundary ban đầu.", true);
+                        return false;
+                    }
                     _isFirstPart = false;
                 }
                 else
                 {
-                    if (!SkipBoundary()) return false;
+                    if (!SkipBoundary())
+                    {
+                        _mainForm.UpdateLog($"[MultipartParser] Không tìm thấy boundary tiếp theo.", true);
+                        return false;
+                    }
                 }
 
-                // Reset filename và content type cho mỗi part
                 Filename = null;
                 ContentType = null;
 
                 string headerLine;
                 while (!string.IsNullOrEmpty(headerLine = ReadLine()))
                 {
+                    _mainForm.UpdateLog($"[MultipartParser] Header: {headerLine}");
                     if (headerLine.StartsWith("Content-Disposition", StringComparison.OrdinalIgnoreCase))
                     {
                         Match encodedMatch = Regex.Match(headerLine, "filename\\*=UTF-8''([^\"]*)");
                         if (encodedMatch.Success)
                         {
-                            Filename = WebUtility.UrlDecode(encodedMatch.Groups[1].Value);
+                            Filename = HttpUtility.UrlDecode(encodedMatch.Groups[1].Value);
+                            _mainForm.UpdateLog($"[MultipartParser] Tên file (UTF-8 encoded): {Filename}");
                         }
                         else
                         {
@@ -1223,102 +770,51 @@ namespace ShareFile
                             if (standardMatch.Success)
                             {
                                 string rawFilename = standardMatch.Groups[1].Value;
-                                string fixedFilename = FixVietnameseEncoding(rawFilename);
-                                if (fixedFilename.Contains("�") || fixedFilename.Contains("Ã") || fixedFilename == rawFilename)
-                                    fixedFilename = FixVietnameseCharacters(rawFilename);
+                                string fixedFilename = _mainForm.FixVietnameseEncoding(rawFilename);
                                 Filename = fixedFilename.Normalize(NormalizationForm.FormC);
+                                _mainForm.UpdateLog($"[MultipartParser] Tên file (fixed): {Filename}");
                             }
                         }
                     }
                     else if (headerLine.StartsWith("Content-Type", StringComparison.OrdinalIgnoreCase))
                     {
                         ContentType = headerLine.Substring(headerLine.IndexOf(':') + 1).Trim();
+                        _mainForm.UpdateLog($"[MultipartParser] Content-Type: {ContentType}");
                     }
                 }
 
-                return !string.IsNullOrEmpty(Filename);
-            }
-
-            private string FixVietnameseEncoding(string input)
-            {
-                // Chuyển chuỗi từ Windows-1252 sang UTF-8
-                // Nếu input là chuỗi bị lỗi, nó thực chất là bytes UTF-8 được đọc bằng Windows-1252
-                byte[] bytes = Encoding.Default.GetBytes(input);
-                return Encoding.UTF8.GetString(bytes);
-            }
-
-            private string FixVietnameseCharacters(string input)
-            {
-                var pairs = new[]
+                if (!string.IsNullOrEmpty(Filename))
                 {
-                    // Ký tự thường
-                    new[] { "Ã ", "à" }, new[] { "Ã¡", "á" }, new[] { "áº£", "ả" }, new[] { "Ã£", "ã" }, new[] { "áº¡", "ạ" },
-                    new[] { "Ä", "ă" }, new[] { "áº±", "ằ" }, new[] { "áº¯", "ắ" }, new[] { "áº³", "ẳ" }, new[] { "áºµ", "ẵ" }, new[] { "áº·", "ặ" },
-                    new[] { "Ã¢", "â" }, new[] { "áº§", "ầ" }, new[] { "áº¥", "ấ" }, new[] { "áº©", "ẩ" }, new[] { "áº«", "ẫ" }, new[] { "áº­", "ậ" },
-                    new[] { "Ã¨", "è" }, new[] { "Ã©", "é" }, new[] { "áº»", "ẻ" }, new[] { "áº½", "ẽ" }, new[] { "áº¹", "ẹ" },
-                    new[] { "Ãª", "ê" }, new[] { "á»", "ề" }, new[] { "á»", "ể" }, new[] { "á»", "ễ" }, new[] { "á»‡", "ệ" }, new[] { "á»‚", "ế" }, new[] { "áº¿", "ế" },
-                    new[] { "Ã¬", "ì" }, new[] { "Ã­", "í" }, new[] { "á»", "ỉ" }, new[] { "á»", "ị" }, new[] { "Ä©", "ĩ" },
-                    new[] { "Ã²", "ò" }, new[] { "Ã³", "ó" }, new[] { "á»", "ỏ" }, new[] { "á»", "ọ" }, new[] { "Ãµ", "õ" }, new[] { "", "ọ" }, // Bổ sung ánh xạ cho "lọc"
-                    new[] { "Ã´", "ô" }, new[] { "á»", "ồ" }, new[] { "á»", "ố" }, new[] { "á»", "ổ" }, new[] { "á»", "ỗ" }, new[] { "á»", "ộ" },
-                    new[] { "Æ¡", "ơ" }, new[] { "á»", "ờ" }, new[] { "á»", "ớ" }, new[] { "á»", "ở" }, new[] { "á»¡", "ỡ" }, new[] { "á»£", "ợ" },
-                    new[] { "Ã¹", "ù" }, new[] { "Ãº", "ú" }, new[] { "á»§", "ủ" }, new[] { "á»©", "ụ" }, new[] { "Å©", "ũ" },
-                    new[] { "Æ°", "ư" }, new[] { "á»«", "ừ" }, new[] { "á»©", "ứ" }, new[] { "á»­", "ử" }, new[] { "á»¯", "ữ" }, new[] { "á»±", "ự" },
-                    new[] { "Ã½", "ý" }, new[] { "á»³", "ỳ" }, new[] { "á»µ", "ỵ" }, new[] { "á»·", "ỷ" }, new[] { "á»¹", "ỹ" },
-                    new[] { "Ä", "đ" },
-                    // Ký tự hoa (chỉ thêm nếu chưa có key trùng)
-                    new[] { "Ã€", "À" }, new[] { "Ã", "Á" }, new[] { "áº¢", "Ả" }, new[] { "Ãƒ", "Ã" }, new[] { "áº ", "Ạ" },
-                    new[] { "Ä‚", "Ă" }, new[] { "áº°", "Ằ" }, new[] { "áº®", "Ắ" }, new[] { "áº²", "Ẳ" }, new[] { "áº´", "Ẵ" }, new[] { "áº¶", "Ặ" },
-                    new[] { "Ã‚", "Â" }, new[] { "áº¦", "Ầ" }, new[] { "áº¤", "Ấ" }, new[] { "áº¨", "Ẩ" }, new[] { "áºª", "Ẫ" }, new[] { "áº¬", "Ậ" },
-                    new[] { "Ãˆ", "È" }, new[] { "Ã‰", "É" }, new[] { "áºº", "Ẻ" }, new[] { "áº¼", "Ẽ" }, new[] { "áº¸", "Ẹ" },
-                    new[] { "ÃŠ", "Ê" }, new[] { "á»€", "Ề" }, new[] { "á»„", "Ể" }, new[] { "á»†", "Ệ" }, new[] { "á»ƒ", "Ế" }, new[] { "á»…", "Ễ" },
-                    new[] { "ÃŒ", "Ì" }, new[] { "Ã", "Í" }, new[] { "á»ˆ", "Ỉ" }, new[] { "á»Š", "Ị" }, new[] { "Ä¨", "Ĩ" },
-                    new[] { "Ã’", "Ò" }, new[] { "Ã“", "Ó" }, new[] { "á»Ž", "Ỏ" }, new[] { "á»", "Ọ" }, new[] { "Ã•", "Õ" },
-                    new[] { "Ã", "Ô" }, new[] { "á»’", "Ồ" }, new[] { "á»“", "Ố" }, new[] { "á»•", "Ổ" }, new[] { "á»—", "Ỗ" }, new[] { "á»™", "Ộ" },
-                    new[] { "Æ ", "Ơ" }, new[] { "á»œ", "Ờ" }, new[] { "á»š", "Ớ" }, new[] { "á»ž", "Ở" }, new[] { "á» ", "Ỡ" }, new[] { "á»¢", "Ợ" },
-                    new[] { "Ã™", "Ù" }, new[] { "Ãš", "Ú" }, new[] { "á»¦", "Ủ" }, new[] { "á»¨", "Ụ" }, new[] { "Å¨", "Ũ" },
-                    new[] { "Æ¯", "Ư" }, new[] { "á»ª", "Ừ" }, new[] { "á»¨", "Ứ" }, new[] { "á»¬", "Ử" }, new[] { "á»®", "Ữ" }, new[] { "á»°", "Ự" },
-                    new[] { "Ã", "Ý" }, new[] { "á»²", "Ỳ" }, new[] { "á»´", "Ỵ" }, new[] { "á»¶", "Ỷ" }, new[] { "á»¸", "Ỹ" },
-                    new[] { "Ä", "Đ" }
-                };
-
-                var replacementMap = new Dictionary<string, string>();
-                foreach (var pair in pairs)
-                {
-                    if (!replacementMap.ContainsKey(pair[0]))
-                        replacementMap.Add(pair[0], pair[1]);
+                    _mainForm.UpdateLog($"[MultipartParser] Đã tìm thấy file: {Filename}");
+                    return true;
                 }
-
-                var sortedKeys = replacementMap.Keys.OrderByDescending(k => k.Length);
-                foreach (var key in sortedKeys)
+                else
                 {
-                    input = input.Replace(key, replacementMap[key]);
+                    _mainForm.UpdateLog($"[MultipartParser] Không tìm thấy tên file trong phần này.", true);
+                    return false;
                 }
-                return input;
             }
 
             public void WritePartDataTo(Stream outputStream)
             {
                 byte[] buffer = new byte[8192];
-                int bytesRead;
                 int bytesInBuffer = 0;
-
-                // Giữ lại đuôi để dò boundary cắt ngang block
-                int keepTail = _boundaryEndBytes.Length + _boundaryBytes.Length;
-                if (keepTail < 4) keepTail = 4;
+                int keepTail = Math.Max(_boundaryBytes.Length, _boundaryEndBytes.Length) + 2;
                 byte[] tail = new byte[keepTail];
 
-                while ((bytesRead = _stream.Read(buffer, bytesInBuffer, buffer.Length - bytesInBuffer)) > 0)
+                while ((bytesInBuffer += ReadBytesInternal(buffer, bytesInBuffer, buffer.Length - bytesInBuffer)) > 0)
                 {
-                    bytesInBuffer += bytesRead;
                     int boundaryIndex = FindBoundary(buffer, bytesInBuffer);
 
                     if (boundaryIndex >= 0)
                     {
-                        // ghi dữ liệu của part (loại bỏ "\r\n" ngay trước boundary)
                         int toWrite = Math.Max(0, boundaryIndex - 2);
-                        if (toWrite > 0) outputStream.Write(buffer, 0, toWrite);
+                        if (toWrite > 0)
+                        {
+                            outputStream.Write(buffer, 0, toWrite);
+                            _mainForm.UpdateLog($"[MultipartParser] Ghi {toWrite} bytes cho file: {Filename}");
+                        }
 
-                        // Đẩy lại PHẦN DƯ (từ boundary trở đi) vào _pushback
                         for (int i = boundaryIndex; i < bytesInBuffer; i++)
                             _pushback.Enqueue(buffer[i]);
 
@@ -1326,11 +822,13 @@ namespace ShareFile
                     }
                     else
                     {
-                        // không thấy boundary: ghi ra trừ phần đuôi để ghép lần sau
                         int toWrite = Math.Max(0, bytesInBuffer - keepTail);
-                        if (toWrite > 0) outputStream.Write(buffer, 0, toWrite);
+                        if (toWrite > 0)
+                        {
+                            outputStream.Write(buffer, 0, toWrite);
+                            _mainForm.UpdateLog($"[MultipartParser] Ghi {toWrite} bytes cho file: {Filename}");
+                        }
 
-                        // copy phần đuôi sang đầu buffer cho lần đọc kế tiếp
                         int remain = bytesInBuffer - toWrite;
                         if (remain > 0)
                         {
@@ -1340,24 +838,56 @@ namespace ShareFile
                     }
                 }
 
-                // hết stream mà không gặp boundary (trường hợp cuối cùng)
                 if (bytesInBuffer > 0)
                 {
                     outputStream.Write(buffer, 0, bytesInBuffer);
-                    bytesInBuffer = 0;
+                    _mainForm.UpdateLog($"[MultipartParser] Ghi {bytesInBuffer} bytes cuối cho file: {Filename}");
                 }
+            }
+
+            public string ReadLine()
+            {
+                var sb = new StringBuilder();
+                int b;
+                while ((b = ReadByteInternal()) != -1)
+                {
+                    if (b == '\n')
+                    {
+                        string line = sb.ToString().TrimEnd('\r');
+                        return line;
+                    }
+                    sb.Append((char)b);
+                }
+                return sb.Length > 0 ? sb.ToString() : null;
+            }
+
+            private bool SkipBoundary()
+            {
+                byte[] buffer = new byte[_boundaryBytes.Length];
+                int got = ReadBytesInternal(buffer, 0, buffer.Length);
+                if (got != buffer.Length)
+                {
+                    _mainForm.UpdateLog($"[MultipartParser] Không đủ dữ liệu để đọc boundary.", true);
+                    return false;
+                }
+                bool isBoundary = ByteArrayEquals(buffer, _boundaryBytes);
+                bool isEndBoundary = ByteArrayEquals(buffer, _boundaryEndBytes);
+                if (!isBoundary && !isEndBoundary)
+                {
+                    _mainForm.UpdateLog($"[MultipartParser] Không khớp với boundary hoặc end boundary.", true);
+                    return false;
+                }
+                return true;
             }
 
             private int ReadBytesInternal(byte[] buffer, int offset, int count)
             {
                 int written = 0;
-                // 1) rút từ pushback trước
                 while (written < count && _pushback.Count > 0)
                 {
                     buffer[offset + written] = _pushback.Dequeue();
                     written++;
                 }
-                // 2) nếu còn thiếu thì đọc từ stream
                 if (written < count)
                 {
                     int n = _stream.Read(buffer, offset + written, count - written);
@@ -1372,36 +902,9 @@ namespace ShareFile
                 return _stream.ReadByte();
             }
 
-
-            private string ReadLine()
-            {
-                var sb = new StringBuilder();
-                int b;
-                while ((b = ReadByteInternal()) != -1)
-                {
-                    if (b == '\n')
-                    {
-                        string line = sb.ToString().TrimEnd('\r');
-                        return line;
-                    }
-                    sb.Append((char)b);
-                }
-                return null;
-            }
-
-
-            private bool SkipBoundary()
-            {
-                byte[] buffer = new byte[_boundaryBytes.Length];
-                int got = ReadBytesInternal(buffer, 0, buffer.Length);
-                if (got != buffer.Length) return false;
-                return ByteArrayEquals(buffer, _boundaryBytes);
-            }
-
-
             private int FindBoundary(byte[] buffer, int length)
             {
-                for (int i = 0; i <= length - _boundaryBytes.Length; i++)
+                for (int i = 0; i <= length - Math.Min(_boundaryBytes.Length, _boundaryEndBytes.Length); i++)
                 {
                     if (ByteArrayEquals(buffer, _boundaryBytes, i) || ByteArrayEquals(buffer, _boundaryEndBytes, i))
                     {
@@ -1421,6 +924,41 @@ namespace ShareFile
                 return true;
             }
         }
+        private string FixVietnameseEncoding(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
+            try
+            {
+                byte[] bytes = Encoding.GetEncoding("Windows-1252").GetBytes(input);
+                string result = Encoding.UTF8.GetString(bytes);
+                if (result.Contains("�"))
+                {
+                    return FixVietnameseCharacters(input);
+                }
+                return result.Normalize(NormalizationForm.FormC);
+            }
+            catch
+            {
+                return FixVietnameseCharacters(input).Normalize(NormalizationForm.FormC);
+            }
+        }
+
+        private string FixVietnameseCharacters(string input)
+        {
+            var replacements = new Dictionary<string, string>
+            {
+                { "á", "a" }, { "à", "a" }, { "ả", "a" }, { "ã", "a" }, { "ạ", "a" },
+                { "ă", "a" }, { "ắ", "a" }, { "ằ", "a" }, { "ẳ", "a" }, { "ẵ", "a" }, { "ặ", "a" },
+                { "đ", "d" }, { "í", "i" }, { "ì", "i" }, { "ỉ", "i" }, { "ĩ", "i" }, { "ị", "i" },
+                { "ó", "o" }, { "ò", "o" }, { "ỏ", "o" }, { "õ", "o" }, { "ọ", "o" },
+                { "ô", "o" }, { "ố", "o" }, { "ồ", "o" }, { "ổ", "o" }, { "ỗ", "o" }, { "ộ", "o" },
+                { "ơ", "o" }, { "ớ", "o" }, { "ờ", "o" }, { "ở", "o" }, { "ỡ", "o" }, { "ợ", "o" },
+                { "ú", "u" }, { "ù", "u" }, { "ủ", "u" }, { "ũ", "u" }, { "ụ", "u" },
+                { "ư", "u" }, { "ứ", "u" }, { "ừ", "u" }, { "ử", "u" }, { "ữ", "u" }, { "ự", "u" },
+                { "ý", "y" }, { "ỳ", "y" }, { "ỷ", "y" }, { "ỹ", "y" }, { "ỵ", "y" }
+            };
+            return replacements.Aggregate(input, (current, pair) => current.Replace(pair.Key, pair.Value));
+        }  
 
         private string GetContentType(string extension)
         {
@@ -1835,117 +1373,517 @@ namespace ShareFile
                 return "SHAREFILE";
             }
         }
-
-        private System.Windows.Forms.Button btnStart;
-        private System.Windows.Forms.Button btnStop;
-        private System.Windows.Forms.Button btnChooseFolder;
-        private System.Windows.Forms.TextBox txtPort;
-        private System.Windows.Forms.Label label1;
-        private System.Windows.Forms.Label lblFolderPath;
-        private System.Windows.Forms.TextBox txtLog;
-
-        private void InitializeComponent()
+        private string GenerateUploadPageHtml()
         {
-            this.components = new System.ComponentModel.Container();
-            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
-            this.btnStart = new System.Windows.Forms.Button();
-            this.btnStop = new System.Windows.Forms.Button();
-            this.btnChooseFolder = new System.Windows.Forms.Button();
-            this.txtPort = new System.Windows.Forms.TextBox();
-            this.label1 = new System.Windows.Forms.Label();
-            this.lblFolderPath = new System.Windows.Forms.Label();
-            this.txtLog = new System.Windows.Forms.TextBox();
-            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
-            this.SuspendLayout();
-            // 
-            // btnStart
-            // 
-            this.btnStart.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnStart.Location = new System.Drawing.Point(230, 5);
-            this.btnStart.Name = "btnStart";
-            this.btnStart.Size = new System.Drawing.Size(95, 36);
-            this.btnStart.TabIndex = 0;
-            this.btnStart.Text = "Bắt đầu chia sẻ";
-            this.btnStart.UseVisualStyleBackColor = true;
-            this.btnStart.Click += new System.EventHandler(this.btnStart_Click);
-            // 
-            // btnStop
-            // 
-            this.btnStop.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnStop.Location = new System.Drawing.Point(333, 5);
-            this.btnStop.Name = "btnStop";
-            this.btnStop.Size = new System.Drawing.Size(95, 36);
-            this.btnStop.TabIndex = 1;
-            this.btnStop.Text = "Dừng chia sẻ";
-            this.btnStop.UseVisualStyleBackColor = true;
-            this.btnStop.Click += new System.EventHandler(this.btnStop_Click);
-            // 
-            // btnChooseFolder
-            // 
-            this.btnChooseFolder.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnChooseFolder.Location = new System.Drawing.Point(12, 36);
-            this.btnChooseFolder.Name = "btnChooseFolder";
-            this.btnChooseFolder.Size = new System.Drawing.Size(100, 32);
-            this.btnChooseFolder.TabIndex = 2;
-            this.btnChooseFolder.Text = "Chọn Thư mục";
-            this.btnChooseFolder.UseVisualStyleBackColor = true;
-            this.btnChooseFolder.Click += new System.EventHandler(this.btnChooseFolder_Click);
-            // 
-            // txtPort
-            // 
-            this.txtPort.Location = new System.Drawing.Point(131, 13);
-            this.txtPort.Name = "txtPort";
-            this.txtPort.Size = new System.Drawing.Size(65, 20);
-            this.txtPort.TabIndex = 3;
-            // 
-            // label1
-            // 
-            this.label1.AutoSize = true;
-            this.label1.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label1.Location = new System.Drawing.Point(48, 16);
-            this.label1.Name = "label1";
-            this.label1.Size = new System.Drawing.Size(64, 15);
-            this.label1.TabIndex = 4;
-            this.label1.Text = "Nhập Port:";
-            // 
-            // lblFolderPath
-            // 
-            this.lblFolderPath.AutoSize = true;
-            this.lblFolderPath.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.lblFolderPath.Location = new System.Drawing.Point(118, 45);
-            this.lblFolderPath.Name = "lblFolderPath";
-            this.lblFolderPath.Size = new System.Drawing.Size(115, 15);
-            this.lblFolderPath.TabIndex = 5;
-            this.lblFolderPath.Text = "Đường dẫn đã chọn:";
-            // 
-            // txtLog
-            // 
-            this.txtLog.Font = new System.Drawing.Font("Tahoma", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.txtLog.Location = new System.Drawing.Point(12, 70);
-            this.txtLog.Multiline = true;
-            this.txtLog.Name = "txtLog";
-            this.txtLog.ReadOnly = true;
-            this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.txtLog.Size = new System.Drawing.Size(416, 230);
-            this.txtLog.TabIndex = 6;
-            // 
-            // MainForm
-            // 
-            this.ClientSize = new System.Drawing.Size(440, 312);
-            this.Controls.Add(this.txtLog);
-            this.Controls.Add(this.lblFolderPath);
-            this.Controls.Add(this.label1);
-            this.Controls.Add(this.txtPort);
-            this.Controls.Add(this.btnChooseFolder);
-            this.Controls.Add(this.btnStop);
-            this.Controls.Add(this.btnStart);
-            this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedSingle;
-            this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Name = "MainForm";
-            this.Text = "Share Share";
-            this.ResumeLayout(false);
-            this.PerformLayout();
+            var sb = new StringBuilder();
+            sb.Append("<!DOCTYPE html>");
+            sb.Append("<html lang='vi'>");
+            sb.Append("<head>");
+            sb.Append("<meta charset='UTF-8'>");
+            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
+            sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+            sb.Append("<title>Tải lên tập tin - ShareFile</title>");
+            sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
 
+            sb.Append("<style>");
+            sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
+            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
+            sb.Append(".upload-container { background: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
+            sb.Append(".header { text-align: center; margin-bottom: 20px; }");
+            sb.Append(".header h1 { font-size: 24px; color: #333; }");
+            sb.Append(".upload-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; background: #fafafa; }");
+            sb.Append(".upload-zone:hover { border-color: #007bff; background: #e9f4ff; }");
+            sb.Append(".upload-zone.dragover { border-color: #007bff; background: #d0e6ff; }");
+            sb.Append(".upload-icon { font-size: 36px; color: #007bff; margin-bottom: 10px; }");
+            sb.Append(".upload-text { font-size: 16px; color: #333; }");
+            sb.Append(".upload-subtext { font-size: 12px; color: #666; margin-top: 5px; }");
+            sb.Append(".file-list { margin: 15px 0; max-height: 200px; overflow-y: auto; }");
+            sb.Append(".file-item { display: flex; align-items: center; padding: 8px; margin-bottom: 5px; background: #f5f5f5; border-radius: 4px; }");
+            sb.Append(".file-name { flex: 1; font-size: 14px; color: #333; }");
+            sb.Append(".file-size { font-size: 12px; color: #666; margin-right: 10px; }");
+            sb.Append(".file-remove { background: #dc3545; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; }");
+            sb.Append(".button-group { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }");
+            sb.Append(".btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }");
+            sb.Append(".btn:disabled { background: #ccc; cursor: not-allowed; }");
+            sb.Append(".btn-secondary { background: #6c757d; }");
+            sb.Append(".progress-container { margin-top: 15px; display: none; }");
+            sb.Append(".progress-label { font-size: 12px; color: #333; margin-bottom: 5px; text-align: center; }");
+            sb.Append(".progress { height: 6px; background: #e0e0e0; border-radius: 3px; overflow: hidden; }");
+            sb.Append(".progress-bar { height: 100%; background: #007bff; width: 0; }");
+            sb.Append(".status-message { padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; text-align: center; display: none; }");
+            sb.Append(".status-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }");
+            sb.Append(".status-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }");
+            sb.Append("@media (max-width: 600px) { .upload-container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } }");
+            sb.Append("</style>");
+            sb.Append("</head>");
+
+            sb.Append("<body>");
+            sb.Append("<div class='upload-container'>");
+            sb.Append("<div class='header'><h1>Tải lên tập tin</h1></div>");
+            sb.Append("<div id='statusMessage' class='status-message'></div>");
+            sb.Append("<div class='upload-zone' id='uploadZone'>");
+            sb.Append("<div class='upload-icon'>☁️</div>");
+            sb.Append("<div class='upload-text'>Kéo thả tập tin vào đây</div>");
+            sb.Append("<div class='upload-subtext'>hoặc nhấn để chọn</div>");
+            sb.Append("<input type='file' id='fileInput' multiple style='display: none;' accept='*/*'>");
+            sb.Append("</div>");
+            sb.Append("<div id='fileList' class='file-list'></div>");
+            sb.Append("<div class='button-group'>");
+            sb.Append("<button id='uploadBtn' class='btn' disabled>Tải lên</button>");
+            sb.Append("<button id='clearBtn' class='btn btn-secondary' disabled>Xóa danh sách</button>");
+            sb.Append("</div>");
+            sb.Append("<div id='progressContainer' class='progress-container'>");
+            sb.Append("<div class='progress-label'>Đang tải...</div>");
+            sb.Append("<div class='progress'><div id='progressBar' class='progress-bar'></div></div>");
+            sb.Append("</div>");
+            sb.Append("</div>");
+
+            sb.Append("<script>");
+            sb.Append("(function() {");
+            sb.Append("  var fileInput = document.getElementById('fileInput');");
+            sb.Append("  var fileList = document.getElementById('fileList');");
+            sb.Append("  var uploadBtn = document.getElementById('uploadBtn');");
+            sb.Append("  var clearBtn = document.getElementById('clearBtn');");
+            sb.Append("  var uploadZone = document.getElementById('uploadZone');");
+            sb.Append("  var progressContainer = document.getElementById('progressContainer');");
+            sb.Append("  var progressBar = document.getElementById('progressBar');");
+            sb.Append("  var statusMessage = document.getElementById('statusMessage');");
+            sb.Append("  var selectedFiles = [];");
+
+            sb.Append("  function showStatus(message, type) {");
+            sb.Append("    statusMessage.innerHTML = message;");
+            sb.Append("    statusMessage.className = 'status-message status-' + type;");
+            sb.Append("    statusMessage.style.display = 'block';");
+            sb.Append("    setTimeout(function() { statusMessage.style.display = 'none'; }, 5000);");
+            sb.Append("  }");
+
+            sb.Append("  function formatFileSize(bytes) {");
+            sb.Append("    if (bytes === 0) return '0 B';");
+            sb.Append("    var k = 1024, sizes = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));");
+            sb.Append("    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];");
+            sb.Append("  }");
+
+            sb.Append("  function updateFileList() {");
+            sb.Append("    fileList.innerHTML = '';");
+            sb.Append("    if (selectedFiles.length === 0) {");
+            sb.Append("      fileList.style.display = 'none';");
+            sb.Append("      uploadBtn.disabled = true;");
+            sb.Append("      clearBtn.disabled = true;");
+            sb.Append("      return;");
+            sb.Append("    }");
+            sb.Append("    fileList.style.display = 'block';");
+            sb.Append("    uploadBtn.disabled = false;");
+            sb.Append("    clearBtn.disabled = false;");
+            sb.Append("    for (var i = 0; i < selectedFiles.length; i++) {");
+            sb.Append("      var file = selectedFiles[i];");
+            sb.Append("      console.log('File added to list: ' + file.name + ', size: ' + file.size);");
+            sb.Append("      var div = document.createElement('div');");
+            sb.Append("      div.className = 'file-item';");
+            sb.Append("      div.innerHTML = '<span class=\"file-name\">' + file.name + '</span>' +");
+            sb.Append("                     '<span class=\"file-size\">' + formatFileSize(file.size) + '</span>' +");
+            sb.Append("                     '<button class=\"file-remove\" onclick=\"removeFile(' + i + ')\">Xóa</button>';");
+            sb.Append("      fileList.appendChild(div);");
+            sb.Append("    }");
+            sb.Append("  }");
+
+            sb.Append("  window.removeFile = function(index) {");
+            sb.Append("    console.log('Removing file at index: ' + index);");
+            sb.Append("    selectedFiles.splice(index, 1);");
+            sb.Append("    updateFileList();");
+            sb.Append("    showStatus('Đã xóa tập tin', 'success');");
+            sb.Append("  };");
+
+            sb.Append("  function handleFiles(files) {");
+            sb.Append("    console.log('Handling ' + files.length + ' files');");
+            sb.Append("    var newFiles = Array.prototype.slice.call(files);");
+            sb.Append("    var duplicates = 0;");
+            sb.Append("    for (var i = 0; i < newFiles.length; i++) {");
+            sb.Append("      var file = newFiles[i];");
+            sb.Append("      var exists = false;");
+            sb.Append("      for (var j = 0; j < selectedFiles.length; j++) {");
+            sb.Append("        if (selectedFiles[j].name === file.name && selectedFiles[j].size === file.size) {");
+            sb.Append("          exists = true; duplicates++; break;");
+            sb.Append("        }");
+            sb.Append("      }");
+            sb.Append("      if (!exists) selectedFiles.push(file);");
+            sb.Append("    }");
+            sb.Append("    updateFileList();");
+            sb.Append("    var message = 'Đã thêm ' + (newFiles.length - duplicates) + ' tập tin';");
+            sb.Append("    if (duplicates > 0) message += ' (' + duplicates + ' trùng lặp bị bỏ qua)';");
+            sb.Append("    showStatus(message, 'success');");
+            sb.Append("  }");
+
+            sb.Append("  uploadZone.onclick = function() {");
+            sb.Append("    console.log('Upload zone clicked');");
+            sb.Append("    fileInput.click();");
+            sb.Append("  };");
+            sb.Append("  fileInput.onchange = function() {");
+            sb.Append("    console.log('File input changed, files: ' + this.files.length);");
+            sb.Append("    if (this.files.length > 0) { handleFiles(this.files); }");
+            sb.Append("    else { showStatus('Không có file nào được chọn', 'error'); }");
+            sb.Append("  };");
+
+            sb.Append("  uploadZone.ondragover = function(e) {");
+            sb.Append("    e.preventDefault();");
+            sb.Append("    uploadZone.className = 'upload-zone dragover';");
+            sb.Append("  };");
+            sb.Append("  uploadZone.ondragleave = function(e) {");
+            sb.Append("    e.preventDefault();");
+            sb.Append("    uploadZone.className = 'upload-zone';");
+            sb.Append("  };");
+            sb.Append("  uploadZone.ondrop = function(e) {");
+            sb.Append("    e.preventDefault();");
+            sb.Append("    uploadZone.className = 'upload-zone';");
+            sb.Append("    console.log('Files dropped: ' + e.dataTransfer.files.length);");
+            sb.Append("    if (e.dataTransfer.files.length > 0) { handleFiles(e.dataTransfer.files); }");
+            sb.Append("    else { showStatus('Không có file nào được kéo thả', 'error'); }");
+            sb.Append("  };");
+
+            sb.Append("  clearBtn.onclick = function() {");
+            sb.Append("    console.log('Clear button clicked');");
+            sb.Append("    selectedFiles = []; fileInput.value = ''; updateFileList();");
+            sb.Append("    showStatus('Đã xóa danh sách tập tin', 'success');");
+            sb.Append("  };");
+
+            sb.Append("  uploadBtn.onclick = function() {");
+            sb.Append("    if (selectedFiles.length === 0) {");
+            sb.Append("      showStatus('Vui lòng chọn ít nhất một file', 'error');");
+            sb.Append("      console.log('No files selected for upload');");
+            sb.Append("      return;");
+            sb.Append("    }");
+            sb.Append("    var formData = new FormData();");
+            sb.Append("    for (var i = 0; i < selectedFiles.length; i++) {");
+            sb.Append("      console.log('Adding to FormData: ' + selectedFiles[i].name + ', size: ' + selectedFiles[i].size);");
+            sb.Append("      formData.append('files[]', selectedFiles[i], selectedFiles[i].name);");
+            sb.Append("    }");
+            sb.Append("    var xhr = new XMLHttpRequest();");
+            sb.Append("    xhr.open('POST', '/upload', true);");
+            sb.Append("    xhr.upload.onprogress = function(e) {");
+            sb.Append("      if (e.lengthComputable) {");
+            sb.Append("        progressContainer.style.display = 'block';");
+            sb.Append("        var percent = Math.round((e.loaded / e.total) * 100);");
+            sb.Append("        progressBar.style.width = percent + '%';");
+            sb.Append("        document.querySelector('.progress-label').innerHTML = 'Đang tải... ' + percent + '%';");
+            sb.Append("        console.log('Upload progress: ' + percent + '%');");
+            sb.Append("      }");
+            sb.Append("    };");
+            sb.Append("    xhr.onload = function() {");
+            sb.Append("      progressContainer.style.display = 'none';");
+            sb.Append("      console.log('Response received: ' + xhr.status + ' ' + xhr.statusText);");
+            sb.Append("      console.log('Response body: ' + xhr.responseText);");
+            sb.Append("      if (xhr.status === 200) {");
+            sb.Append("        document.open(); document.write(xhr.responseText); document.close();");
+            sb.Append("      } else {");
+            sb.Append("        showStatus('Lỗi tải lên: ' + xhr.statusText + ' (Status: ' + xhr.status + ')', 'error');");
+            sb.Append("      }");
+            sb.Append("    };");
+            sb.Append("    xhr.onerror = function() {");
+            sb.Append("      progressContainer.style.display = 'none';");
+            sb.Append("      showStatus('Lỗi kết nối mạng', 'error');");
+            sb.Append("      console.log('Network error during upload');");
+            sb.Append("    };");
+            sb.Append("    xhr.onreadystatechange = function() {");
+            sb.Append("      if (xhr.readyState === 4) {");
+            sb.Append("        console.log('Final response: ' + xhr.status + ' ' + xhr.statusText);");
+            sb.Append("      }");
+            sb.Append("    };");
+            sb.Append("    uploadBtn.disabled = true; clearBtn.disabled = true;");
+            sb.Append("    showStatus('Đang tải lên ' + selectedFiles.length + ' tập tin...', 'success');");
+            sb.Append("    console.log('Starting upload with ' + selectedFiles.length + ' files');");
+            sb.Append("    xhr.send(formData);");
+            sb.Append("  };");
+            sb.Append("})();");
+            sb.Append("</script>");
+            sb.Append("</body></html>");
+
+            return sb.ToString();
         }
+
+        private async Task HandleFileUpload(HttpListenerContext context)
+        {
+            string clientIp = context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+            var uploadedFiles = new List<string>();
+            var failedFiles = new List<string>();
+
+            try
+            {
+                var request = context.Request;
+                UpdateLog($"[{clientIp}] Nhận yêu cầu POST /upload, Content-Type: {request.ContentType}, Content-Length: {request.ContentLength64}");
+
+                if (!request.HasEntityBody || request.ContentLength64 == 0)
+                {
+                    await SendErrorResponse(context, 400, "Không có dữ liệu tải lên.");
+                    UpdateLog($"[{clientIp}] Không có dữ liệu tải lên.", true);
+                    return;
+                }
+
+                if (!request.ContentType.Contains("multipart/form-data"))
+                {
+                    await SendErrorResponse(context, 400, "Content-Type phải là multipart/form-data.");
+                    UpdateLog($"[{clientIp}] Content-Type không hợp lệ: {request.ContentType}", true);
+                    return;
+                }
+
+                string boundary = GetBoundary(request.ContentType);
+                if (string.IsNullOrEmpty(boundary))
+                {
+                    await SendErrorResponse(context, 400, "Thiếu boundary trong Content-Type.");
+                    UpdateLog($"[{clientIp}] Thiếu boundary trong Content-Type.", true);
+                    return;
+                }
+                UpdateLog($"[{clientIp}] Boundary: {boundary}");
+
+                string uploadDir = Path.Combine(_sharedFolderPath, "Uploads");
+                try
+                {
+                    if (!Directory.Exists(uploadDir))
+                    {
+                        Directory.CreateDirectory(uploadDir);
+                        UpdateLog($"[{clientIp}] Đã tạo thư mục Uploads: {uploadDir}");
+                    }
+                    string testFile = Path.Combine(uploadDir, "test_" + Guid.NewGuid().ToString() + ".txt");
+                    File.WriteAllText(testFile, "test");
+                    File.Delete(testFile);
+                    UpdateLog($"[{clientIp}] Kiểm tra quyền ghi vào Uploads: Thành công");
+                }
+                catch (Exception ex)
+                {
+                    await SendErrorResponse(context, 500, $"Không thể tạo hoặc ghi vào thư mục Uploads: {ex.Message}");
+                    UpdateLog($"[{clientIp}] Lỗi tạo hoặc ghi thư mục Uploads: {ex.Message}", true);
+                    return;
+                }
+
+                var parser = new MultipartParser(request.InputStream, boundary, this);
+                while (parser.ReadNextPart())
+                {
+                    string fileName = parser.Filename;
+                    if (string.IsNullOrEmpty(fileName))
+                    {
+                        UpdateLog($"[{clientIp}] Không tìm thấy tên file trong phần multipart.", true);
+                        continue;
+                    }
+
+                    string safeFileName = GetUniqueFilename(uploadDir, fileName);
+                    string savePath = Path.Combine(uploadDir, safeFileName);
+
+                    try
+                    {
+                        using (var fileStream = new FileStream(
+                            savePath,
+                            FileMode.Create,
+                            FileAccess.Write,
+                            FileShare.None,
+                            8192,
+                            FileOptions.Asynchronous))
+                        {
+                            parser.WritePartDataTo(fileStream);
+                            await fileStream.FlushAsync();
+                            fileStream.Close();
+                        }
+
+                        if (File.Exists(savePath))
+                        {
+                            FileInfo fi = new FileInfo(savePath);
+                            if (fi.Length > 0)
+                            {
+                                UpdateLog($"[{clientIp}] Đã upload thành công: {safeFileName} ({FormatFileSize(fi.Length)})");
+                                uploadedFiles.Add(safeFileName);
+                            }
+                            else
+                            {
+                                UpdateLog($"[{clientIp}] File hỏng (kích thước 0): {safeFileName}", true);
+                                failedFiles.Add(safeFileName);
+                            }
+                        }
+                        else
+                        {
+                            UpdateLog($"[{clientIp}] File không tồn tại sau khi lưu: {safeFileName}", true);
+                            failedFiles.Add(safeFileName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        UpdateLog($"[{clientIp}] Lỗi khi lưu file {safeFileName}: {ex.Message}", true);
+                        failedFiles.Add(safeFileName);
+                    }
+                }
+
+                if (parser.ReadLine() != null)
+                {
+                    UpdateLog($"[{clientIp}] Dữ liệu dư thừa sau khi xử lý multipart.", true);
+                }
+
+                if (uploadedFiles.Any() || failedFiles.Any())
+                {
+                    UpdateLog($"[{clientIp}] Kết quả: {uploadedFiles.Count} file thành công, {failedFiles.Count} file thất bại.");
+                    await SendSuccessResponse(context, uploadedFiles, failedFiles);
+                }
+                else
+                {
+                    await SendErrorResponse(context, 400, "Không có file nào được upload.");
+                    UpdateLog($"[{clientIp}] Không có file nào được upload.", true);
+                }
+            }
+            catch (Exception ex)
+            {
+                await SendErrorResponse(context, 500, "Lỗi khi upload: " + ex.Message);
+                UpdateLog($"[{clientIp}] Lỗi khi upload: {ex.Message}", true);
+            }
+        }
+
+        private string GenerateSuccessPageHtml(List<string> uploadedFiles, List<string> failedFiles)
+        {
+            var sb = new StringBuilder();
+            sb.Append("<!DOCTYPE html>");
+            sb.Append("<html lang='vi'>");
+            sb.Append("<head>");
+            sb.Append("<meta charset='UTF-8'>");
+            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
+            sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+            sb.Append("<title>Upload Thành Công - ShareFile</title>");
+            sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
+            sb.Append("<style>");
+            sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
+            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
+            sb.Append(".container { background: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
+            sb.Append(".header { text-align: center; margin-bottom: 20px; }");
+            sb.Append(".header h1 { font-size: 24px; color: #333; }");
+            sb.Append("ul { list-style-type: none; padding: 0; }");
+            sb.Append("li { padding: 10px; margin-bottom: 5px; border-radius: 4px; }");
+            sb.Append(".success { background: #d4edda; color: #155724; }");
+            sb.Append(".error { background: #f8d7da; color: #721c24; }");
+            sb.Append(".button-group { text-align: center; margin-top: 20px; }");
+            sb.Append(".button { display: inline-block; padding: 10px 20px; margin: 0 10px; border-radius: 4px; text-decoration: none; font-size: 16px; font-weight: Reguler; cursor: pointer; transition: background-color 0.3s; }");
+            sb.Append(".button-upload { background: #28a745; color: #fff; }");
+            sb.Append(".button-upload:hover { background: #218838; }");
+            sb.Append(".button-back { background: #007bff; color: #fff; }");
+            sb.Append(".button-back:hover { background: #0056b3; }");
+            sb.Append("@media (max-width: 600px) { .container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } .button { display: block; margin: 10px auto; width: 80%; } }");
+            sb.Append("</style>");
+            sb.Append("</head>");
+
+            sb.Append("<body>");
+            sb.Append("<div class='container'>");
+            sb.Append("<div class='header'><h1>Tải lên thành công!</h1></div>");
+
+            if (uploadedFiles.Any())
+            {
+                sb.Append("<h3>Đã tải lên thành công:</h3>");
+                sb.Append("<ul>");
+                foreach (var file in uploadedFiles)
+                {
+                    sb.Append($"<li class='success'>{WebUtility.HtmlEncode(file)}</li>");
+                }
+                sb.Append("</ul>");
+            }
+
+            if (failedFiles.Any())
+            {
+                sb.Append("<h3>Các file tải lên thất bại:</h3>");
+                sb.Append("<ul>");
+                foreach (var file in failedFiles)
+                {
+                    sb.Append($"<li class='error'>{WebUtility.HtmlEncode(file)}</li>");
+                }
+                sb.Append("</ul>");
+            }
+
+            if (!uploadedFiles.Any() && !failedFiles.Any())
+            {
+                sb.Append("<p>Không có file nào được upload.</p>");
+            }
+
+            sb.Append("<div class='button-group'>");
+            sb.Append("<a href='/upload' class='button button-upload'>Tải lên file khác</a>");
+            sb.Append("<a href='/' class='button button-back'>Quay lại thư mục chính</a>");
+            sb.Append("</div>");
+            sb.Append("</div>");
+            sb.Append("</body></html>");
+
+            return sb.ToString();
+        }
+
+        private async Task SendSuccessResponse(HttpListenerContext context, List<string> uploadedFiles, List<string> failedFiles)
+        {
+            // Kiểm tra lại file để đảm bảo không bị hỏng
+            string uploadDir = Path.Combine(_sharedFolderPath, "Uploads");
+            var verifiedFiles = new List<string>();
+            var corruptedFiles = new List<string>(failedFiles);
+
+            foreach (var file in uploadedFiles)
+            {
+                string filePath = Path.Combine(uploadDir, file);
+                try
+                {
+                    FileInfo fi = new FileInfo(filePath);
+                    if (fi.Length > 0)
+                    {
+                        verifiedFiles.Add(file);
+                    }
+                    else
+                    {
+                        corruptedFiles.Add(file);
+                        UpdateLog($"[{context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown"}] File hỏng (kích thước 0): {file}", true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    corruptedFiles.Add(file);
+                    UpdateLog($"[{context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown"}] Lỗi kiểm tra file {file}: {ex.Message}", true);
+                }
+            }
+
+            string htmlContent = GenerateSuccessPageHtml(verifiedFiles, corruptedFiles);
+            byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+            context.Response.StatusCode = 200;
+            context.Response.ContentType = "text/html; charset=UTF-8";
+            context.Response.ContentLength64 = buffer.Length;
+            await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+            context.Response.Close();
+        }
+
+        private async Task SendErrorResponse(HttpListenerContext context, int statusCode, string message)
+        {
+            string htmlContent = $"<html><body><h1>{statusCode} Error</h1><p>{WebUtility.HtmlEncode(message)}</p></body></html>";
+            byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+            context.Response.StatusCode = statusCode;
+            context.Response.ContentType = "text/html; charset=UTF-8";
+            context.Response.ContentLength64 = buffer.Length;
+            await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+            context.Response.Close();
+        }
+
+        private string GetBoundary(string contentType)
+        {
+            if (string.IsNullOrEmpty(contentType)) return null;
+            var match = Regex.Match(contentType, @"boundary=(?:(?:""([^""]*)"")|([^\s;]+))");
+            return match.Success ? (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value) : null;
+        }
+
+        private string GetUniqueFilename(string directory, string fileName)
+        {
+            string safeFileName = GetSafeFilename(fileName);
+            string baseName = Path.GetFileNameWithoutExtension(safeFileName);
+            string extension = Path.GetExtension(safeFileName);
+            string path = Path.Combine(directory, safeFileName);
+            int counter = 1;
+
+            while (File.Exists(path))
+            {
+                string newFileName = $"{baseName}_{counter}{extension}";
+                path = Path.Combine(directory, newFileName);
+                counter++;
+            }
+
+            return Path.GetFileName(path);
+        }
+
+        private string GetSafeFilename(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName)) return "unnamed_file";
+            string invalidChars = Regex.Escape(new string(Path.GetInvalidFileNameChars()));
+            string safe = Regex.Replace(fileName, $"[{invalidChars}]", "_");
+            return FixVietnameseCharacters(safe);
+        }          
     }
 }
