@@ -1384,11 +1384,10 @@ namespace ShareFile
             sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
             sb.Append("<title>Tải lên tập tin - ShareFile</title>");
             sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
-
             sb.Append("<style>");
             sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
             sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
-            sb.Append(".upload-container { background: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
+            sb.Append(".upload-container { background: #FFFFFF; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
             sb.Append(".header { text-align: center; margin-bottom: 20px; }");
             sb.Append(".header h1 { font-size: 24px; color: #333; }");
             sb.Append(".upload-zone { border: 2px dashed #ccc; border-radius: 8px; padding: 20px; text-align: center; cursor: pointer; background: #fafafa; }");
@@ -1422,7 +1421,7 @@ namespace ShareFile
             sb.Append("<div class='header'><h1>Tải lên tập tin</h1></div>");
             sb.Append("<div id='statusMessage' class='status-message'></div>");
             sb.Append("<div class='upload-zone' id='uploadZone'>");
-            sb.Append("<div class='upload-icon'>☁️</div>");
+            sb.Append("<div class='upload-icon'>⇪ ⇪ ⇪</div>");
             sb.Append("<div class='upload-text'>Kéo thả tập tin vào đây</div>");
             sb.Append("<div class='upload-subtext'>hoặc nhấn để chọn</div>");
             sb.Append("<input type='file' id='fileInput' multiple style='display: none;' accept='*/*'>");
@@ -1599,6 +1598,79 @@ namespace ShareFile
             return sb.ToString();
         }
 
+        private string GenerateSuccessPageHtml(List<string> uploadedFiles, List<string> failedFiles)
+        {
+            var sb = new StringBuilder();
+            sb.Append("<!DOCTYPE html>");
+            sb.Append("<html lang='vi'>");
+            sb.Append("<head>");
+            sb.Append("<meta charset='UTF-8'>");
+            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
+            sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+            sb.Append("<title>Tải lên thành công! - ShareFile</title>");
+            sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
+            sb.Append("<style>");
+            sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
+            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
+            sb.Append(".container { background: #fcfcfc; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
+            sb.Append(".header { text-align: center; margin-bottom: 20px; }");
+            sb.Append(".header h1 { font-size: 24px; color: #228B22; }");
+            sb.Append("ul { list-style-type: none; padding: 0; }");
+            sb.Append("li { padding: 10px; margin-bottom: 5px; border-radius: 4px; }");
+            sb.Append(".success { background: #d4edda; color: #155724; }");
+            sb.Append(".error { background: #f8d7da; color: #721c24; }");
+            sb.Append(".button-group { text-align: center; margin-top: 20px; }");
+            sb.Append(".button { display: inline-block; padding: 8px 8px; margin: 0 20px; border-radius: 4px; text-decoration: none; font-size: 16px; font-weight: Reguler; cursor: pointer; transition: background-color 0.3s; }");
+            sb.Append(".button-upload { background: #28a745; color: #fff; }");
+            sb.Append(".button-upload:hover { background: #218838; }");
+            sb.Append(".button-back { background: #007bff; color: #fff; }");
+            sb.Append(".button-back:hover { background: #0056b3; }");
+            sb.Append("@media (max-width: 600px) { .container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } .button { display: block; margin: 10px auto; width: 80%; } }");
+            sb.Append("</style>");
+            sb.Append("</head>");
+
+            sb.Append("<body>");
+            sb.Append("<div class='container'>");
+            sb.Append("<div class='header'><h1>✔ Tải lên thành công!</h1></div>");
+
+            if (uploadedFiles.Any())
+            {
+                sb.Append("<h3>𓆰 Đã tải lên thành công file:</h3>");
+                sb.Append("<ul>");
+                foreach (var file in uploadedFiles)
+                {
+                    sb.Append($"<li class='success'>{WebUtility.HtmlEncode(file)}</li>");
+                }
+                sb.Append("</ul>");
+            }
+
+            if (failedFiles.Any())
+            {
+                sb.Append("<h3>✖ Các file tải lên thất bại:</h3>");
+                sb.Append("<ul>");
+                foreach (var file in failedFiles)
+                {
+                    sb.Append($"<li class='error'>{WebUtility.HtmlEncode(file)}</li>");
+                }
+                sb.Append("</ul>");
+            }
+
+            if (!uploadedFiles.Any() && !failedFiles.Any())
+            {
+                sb.Append("<p>Không có file nào được upload.</p>");
+            }
+
+            sb.Append("<div class='button-group'>");
+            sb.Append("<a href='/upload' class='button button-upload'>Tải lên file khác</a>");
+            sb.Append("<a href='/' class='button button-back'>Quay lại thư mục chính</a>");
+            sb.Append("</div>");
+            sb.Append("</div>");
+            sb.Append("</body></html>");
+
+            return sb.ToString();
+        }
+
+
         private async Task HandleFileUpload(HttpListenerContext context)
         {
             string clientIp = context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown";
@@ -1731,78 +1803,7 @@ namespace ShareFile
             }
         }
 
-        private string GenerateSuccessPageHtml(List<string> uploadedFiles, List<string> failedFiles)
-        {
-            var sb = new StringBuilder();
-            sb.Append("<!DOCTYPE html>");
-            sb.Append("<html lang='vi'>");
-            sb.Append("<head>");
-            sb.Append("<meta charset='UTF-8'>");
-            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
-            sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-            sb.Append("<title>Upload Thành Công - ShareFile</title>");
-            sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
-            sb.Append("<style>");
-            sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
-            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
-            sb.Append(".container { background: #ffffff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
-            sb.Append(".header { text-align: center; margin-bottom: 20px; }");
-            sb.Append(".header h1 { font-size: 24px; color: #333; }");
-            sb.Append("ul { list-style-type: none; padding: 0; }");
-            sb.Append("li { padding: 10px; margin-bottom: 5px; border-radius: 4px; }");
-            sb.Append(".success { background: #d4edda; color: #155724; }");
-            sb.Append(".error { background: #f8d7da; color: #721c24; }");
-            sb.Append(".button-group { text-align: center; margin-top: 20px; }");
-            sb.Append(".button { display: inline-block; padding: 10px 20px; margin: 0 10px; border-radius: 4px; text-decoration: none; font-size: 16px; font-weight: Reguler; cursor: pointer; transition: background-color 0.3s; }");
-            sb.Append(".button-upload { background: #28a745; color: #fff; }");
-            sb.Append(".button-upload:hover { background: #218838; }");
-            sb.Append(".button-back { background: #007bff; color: #fff; }");
-            sb.Append(".button-back:hover { background: #0056b3; }");
-            sb.Append("@media (max-width: 600px) { .container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } .button { display: block; margin: 10px auto; width: 80%; } }");
-            sb.Append("</style>");
-            sb.Append("</head>");
-
-            sb.Append("<body>");
-            sb.Append("<div class='container'>");
-            sb.Append("<div class='header'><h1>Tải lên thành công!</h1></div>");
-
-            if (uploadedFiles.Any())
-            {
-                sb.Append("<h3>Đã tải lên thành công:</h3>");
-                sb.Append("<ul>");
-                foreach (var file in uploadedFiles)
-                {
-                    sb.Append($"<li class='success'>{WebUtility.HtmlEncode(file)}</li>");
-                }
-                sb.Append("</ul>");
-            }
-
-            if (failedFiles.Any())
-            {
-                sb.Append("<h3>Các file tải lên thất bại:</h3>");
-                sb.Append("<ul>");
-                foreach (var file in failedFiles)
-                {
-                    sb.Append($"<li class='error'>{WebUtility.HtmlEncode(file)}</li>");
-                }
-                sb.Append("</ul>");
-            }
-
-            if (!uploadedFiles.Any() && !failedFiles.Any())
-            {
-                sb.Append("<p>Không có file nào được upload.</p>");
-            }
-
-            sb.Append("<div class='button-group'>");
-            sb.Append("<a href='/upload' class='button button-upload'>Tải lên file khác</a>");
-            sb.Append("<a href='/' class='button button-back'>Quay lại thư mục chính</a>");
-            sb.Append("</div>");
-            sb.Append("</div>");
-            sb.Append("</body></html>");
-
-            return sb.ToString();
-        }
-
+       
         private async Task SendSuccessResponse(HttpListenerContext context, List<string> uploadedFiles, List<string> failedFiles)
         {
             // Kiểm tra lại file để đảm bảo không bị hỏng
