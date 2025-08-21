@@ -144,8 +144,10 @@ namespace ShareFile
 
             // HIỂN THỊ DÒNG NÀY SAU
             UpdateLog("Đã kích hoạt chế độ ngăn máy tính sleep");
-
             notifyIcon.Text = "Ứng dụng chia sẻ file đã sẵn sàng";
+            
+            //TỰ ĐỘNG BẮT ĐẦU CHIA SẺ NGAY KHI MỞ APP
+            btnStart.PerformClick();
         }
 
         protected override void WndProc(ref Message m)
@@ -457,6 +459,29 @@ namespace ShareFile
 
             // Giải mã URL và xử lý ký tự đặc biệt
             relativePath = SafeDecode(relativePath);
+
+            // Nếu yêu cầu favicon.ico thì trả về icon ứng dụng
+            if (string.Equals(relativePath, "/favicon.ico", StringComparison.OrdinalIgnoreCase))
+            {
+                using (var ms = new MemoryStream())
+                {
+                    // Nếu ứng dụng có Icon thì dùng, không thì dùng icon mặc định của Windows
+                    Icon icon = this.Icon ?? SystemIcons.Application;
+
+                    using (var bmp = icon.ToBitmap())
+                    {
+                        bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    }
+
+                    byte[] buffer = ms.ToArray();
+                    context.Response.ContentType = "image/png";
+                    context.Response.ContentLength64 = buffer.Length;
+                    await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    context.Response.OutputStream.Close();
+                }
+                return;
+            }
+
 
             if (string.IsNullOrEmpty(relativePath))
                 relativePath = "/";
