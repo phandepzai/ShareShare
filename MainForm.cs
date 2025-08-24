@@ -135,7 +135,7 @@ namespace ShareFile
             btnStop.Enabled = false;
 
             // HIỂN THỊ DÒNG NÀY TRƯỚC
-            UpdateLog("Coder: ©Nông Văn Phấn");
+            UpdateLog("Developer by ©Nông Văn Phấn");
 
             // Đảm bảo ngăn sleep đã được kích hoạt nhưng KHÔNG hiển thị log
             if (!_preventSleep)
@@ -388,9 +388,9 @@ namespace ShareFile
                 UpdateLog($"   http://{localIP}:{port}");
                 UpdateLog($"   http://{computerName}:{port}");
                 UpdateLog("");
-                UpdateLog("📁 TRUY CẬP TỪ FILE EXPLORER:");
-                UpdateLog($"   \\\\{localIP}");
-                UpdateLog($"   \\\\{computerName}");
+                UpdateLog("📁 TRUY CẬP TỪ TRÌNH DUYỆT:");
+                UpdateLog($"   http://{localIP}:{port}/upload");
+                UpdateLog($"   Để upload chia sẻ file");
                 UpdateLog("");
                 UpdateLog("✅ Có thể truy cập từ các thiết bị trong mạng LAN");
                 UpdateLog("═".PadRight(45, '═'));
@@ -577,8 +577,8 @@ namespace ShareFile
                         }
                     }
 
-                    if (extension == ".txt" || extension == ".ini" || extension == ".html" || extension == ".htm" ||
-        extension == ".css" || extension == ".js" || extension == ".json" || extension == ".xml")
+                    if (extension == ".txt" || extension == ".ini" || extension == ".html" || extension == ".htm" || extension == ".md" ||
+                        extension == ".css" || extension == ".js" || extension == ".json" || extension == ".xml")
                     {
                         // Đối với file text, đọc toàn bộ nội dung
                         string content = File.ReadAllText(fullPath, Encoding.UTF8);
@@ -655,7 +655,7 @@ namespace ShareFile
             var browserDisplayableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 // Text files
-                ".txt", ".html", ".htm", ".css", ".js", ".json", ".xml",
+                ".txt", ".html", ".htm", ".css", ".js", ".json", ".xml", ".md", ".ini",
         
                 // Image files
                 ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico",
@@ -684,9 +684,34 @@ namespace ShareFile
                 .Replace("%25", "~PERCENT~") // %
                 .Replace("%26", "~AMP~")     // &
                 .Replace("%2A", "~STAR~")    // *
-                .Replace("%2B", "~PLUS~")    // +
-                .Replace("%3D", "~EQUAL~");  // =
+                .Replace("%2B", "~PLUS~")    // + (uncomment để bảo vệ + gốc)
+                .Replace("%3D", "~EQUAL~")   // =
+                .Replace("%28", "(")
+                .Replace("%29", ")")
+                .Replace("%2F", "/")
+                .Replace("%5B", "[")
+                .Replace("%5D", "]")
+                .Replace("%20", "~")
+                .Replace("%21", "!")
+                .Replace("%40", "@");
 
+                //.Replace("%21", "!")
+                //.Replace("%40", "@")
+                //.Replace("%23", "~hash~");
+                //.Replace("%24", "$")
+                //.Replace("%25", "%")
+                //.Replace("%5E", "^")
+                //.Replace("%26", "&")
+                //.Replace("%28", "(")
+                //.Replace("%29", ")")
+                //.Replace("%60", "`")
+                //.Replace("%7E", "~")
+                //.Replace("%7B", "{")
+                //.Replace("%7D", "}")
+                //.Replace("%5B", "[")
+                //.Replace("%5D", "]");
+
+            // Encode URL
             return encoded;
         }
 
@@ -701,8 +726,32 @@ namespace ShareFile
                 .Replace("~PERCENT~", "%25")
                 .Replace("~AMP~", "%26")
                 .Replace("~STAR~", "%2A")
-                .Replace("~PLUS~", "%2B")
-                .Replace("~EQUAL~", "%3D");
+                .Replace("~PLUS~", "%2B")    // Uncomment để bảo vệ + gốc
+                .Replace("~EQUAL~", "%3D")
+                .Replace("/", "%2F")
+                .Replace("(", "%28")
+                .Replace(")", "%29")
+                .Replace("[", "%5B")
+                .Replace("]", "%5D")
+                .Replace("!", "%21")
+                .Replace("~", "%20")
+                .Replace("@", "%40");
+
+                //.Replace("!", "%21")
+                //.Replace("@", "%40")
+                //.Replace("#", "%23")
+                //.Replace("$", "%24")
+                //.Replace("%", "%25")
+                //.Replace("^", "%5E")
+                //.Replace("&", "%26")
+                //.Replace("(", "%28")
+                //.Replace(")", "%29")
+                //.Replace("`", "%60")
+                //.Replace("~", "%7E")
+                //.Replace("{", "%7B")
+                //.Replace("}", "%7D")
+                //.Replace("[", "%5B")
+                //.Replace("]", "%5D");
 
             // Decode URL
             return Uri.UnescapeDataString(decoded);
@@ -958,7 +1007,7 @@ namespace ShareFile
                 { "ý", "y" }, { "ỳ", "y" }, { "ỷ", "y" }, { "ỹ", "y" }, { "ỵ", "y" }
             };
             return replacements.Aggregate(input, (current, pair) => current.Replace(pair.Key, pair.Value));
-        }  
+        }
 
         private string GetContentType(string extension)
         {
@@ -972,6 +1021,8 @@ namespace ShareFile
                 { ".js", "application/javascript" },
                 { ".json", "application/json" },
                 { ".xml", "application/xml" },
+                { ".ini", "text/plain; charset=utf-8" },
+                { ".md", "text/html; charset=utf-8" },
         
                 // Image files - mở trực tiếp trên trình duyệt
                 { ".jpg", "image/jpeg" },
@@ -1156,7 +1207,7 @@ namespace ShareFile
 
         private void UpdateLog(string message, bool isError = false)
         {
-            string prefix = isError ? "❖ [!] " : "⚡ "; // Giữ nguyên phần prefix nếu cần highlight lỗi
+            string prefix = isError ? "❖ [!] " : "• "; // Giữ nguyên phần prefix nếu cần highlight lỗi
             string timePart = $"[{DateTime.Now:dd/MM/yyyy HH:mm:ss}]"; // Định dạng thời gian trong []
             string formattedMessage = $"{prefix}{timePart}\n {message}"; // Kết hợp thành chuỗi hoàn chỉnh
 
@@ -1475,7 +1526,7 @@ namespace ShareFile
             sb.Append("    clearBtn.disabled = false;");
             sb.Append("    for (var i = 0; i < selectedFiles.length; i++) {");
             sb.Append("      var file = selectedFiles[i];");
-            sb.Append("      console.log('File added to list: ' + file.name + ', size: ' + file.size);");
+            sb.Append("      console.log('Tập tin đã được thêm vào danh sách: ' + file.name + ', size: ' + file.size);");
             sb.Append("      var div = document.createElement('div');");
             sb.Append("      div.className = 'file-item';");
             sb.Append("      div.innerHTML = '<span class=\"file-name\">' + file.name + '</span>' +");
@@ -1486,7 +1537,7 @@ namespace ShareFile
             sb.Append("  }");
 
             sb.Append("  window.removeFile = function(index) {");
-            sb.Append("    console.log('Removing file at index: ' + index);");
+            sb.Append("    console.log('Đang xóa file tại chỉ mục: ' + index);");
             sb.Append("    selectedFiles.splice(index, 1);");
             sb.Append("    updateFileList();");
             sb.Append("    showStatus('Đã xóa tập tin', 'success');");
@@ -1513,11 +1564,11 @@ namespace ShareFile
             sb.Append("  }");
 
             sb.Append("  uploadZone.onclick = function() {");
-            sb.Append("    console.log('Upload zone clicked');");
+            sb.Append("    console.log('Đã bấm nút Tải lên');");
             sb.Append("    fileInput.click();");
             sb.Append("  };");
             sb.Append("  fileInput.onchange = function() {");
-            sb.Append("    console.log('File input changed, files: ' + this.files.length);");
+            sb.Append("    console.log('Tập tin đã được chọn/cập nhật: ' + this.files.length);");
             sb.Append("    if (this.files.length > 0) { handleFiles(this.files); }");
             sb.Append("    else { showStatus('Không có file nào được chọn', 'error'); }");
             sb.Append("  };");
@@ -1533,13 +1584,13 @@ namespace ShareFile
             sb.Append("  uploadZone.ondrop = function(e) {");
             sb.Append("    e.preventDefault();");
             sb.Append("    uploadZone.className = 'upload-zone';");
-            sb.Append("    console.log('Files dropped: ' + e.dataTransfer.files.length);");
+            sb.Append("    console.log('Tập tin đã được thêm vào: ' + e.dataTransfer.files.length);");
             sb.Append("    if (e.dataTransfer.files.length > 0) { handleFiles(e.dataTransfer.files); }");
             sb.Append("    else { showStatus('Không có file nào được kéo thả', 'error'); }");
             sb.Append("  };");
 
             sb.Append("  clearBtn.onclick = function() {");
-            sb.Append("    console.log('Clear button clicked');");
+            sb.Append("    console.log('Nút xóa đã được nhấp');");
             sb.Append("    selectedFiles = []; fileInput.value = ''; updateFileList();");
             sb.Append("    showStatus('Đã xóa danh sách tập tin', 'success');");
             sb.Append("  };");
@@ -1547,12 +1598,12 @@ namespace ShareFile
             sb.Append("  uploadBtn.onclick = function() {");
             sb.Append("    if (selectedFiles.length === 0) {");
             sb.Append("      showStatus('Vui lòng chọn ít nhất một file', 'error');");
-            sb.Append("      console.log('No files selected for upload');");
+            sb.Append("      console.log('Không có file nào được chọn để tải lên');");
             sb.Append("      return;");
             sb.Append("    }");
             sb.Append("    var formData = new FormData();");
             sb.Append("    for (var i = 0; i < selectedFiles.length; i++) {");
-            sb.Append("      console.log('Adding to FormData: ' + selectedFiles[i].name + ', size: ' + selectedFiles[i].size);");
+            sb.Append("      console.log('Thêm dữ liệu vào FormData: ' + selectedFiles[i].name + ', size: ' + selectedFiles[i].size);");
             sb.Append("      formData.append('files[]', selectedFiles[i], selectedFiles[i].name);");
             sb.Append("    }");
             sb.Append("    var xhr = new XMLHttpRequest();");
@@ -1563,13 +1614,13 @@ namespace ShareFile
             sb.Append("        var percent = Math.round((e.loaded / e.total) * 100);");
             sb.Append("        progressBar.style.width = percent + '%';");
             sb.Append("        document.querySelector('.progress-label').innerHTML = 'Đang tải... ' + percent + '%';");
-            sb.Append("        console.log('Upload progress: ' + percent + '%');");
+            sb.Append("        console.log('Tiến độ tải lên: ' + percent + '%');");
             sb.Append("      }");
             sb.Append("    };");
             sb.Append("    xhr.onload = function() {");
             sb.Append("      progressContainer.style.display = 'none';");
-            sb.Append("      console.log('Response received: ' + xhr.status + ' ' + xhr.statusText);");
-            sb.Append("      console.log('Response body: ' + xhr.responseText);");
+            sb.Append("      console.log('Đã nhận được phản hồi: ' + xhr.status + ' ' + xhr.statusText);");
+            sb.Append("      console.log('Nội dung phản hồi: ' + xhr.responseText);");
             sb.Append("      if (xhr.status === 200) {");
             sb.Append("        document.open(); document.write(xhr.responseText); document.close();");
             sb.Append("      } else {");
@@ -1579,16 +1630,16 @@ namespace ShareFile
             sb.Append("    xhr.onerror = function() {");
             sb.Append("      progressContainer.style.display = 'none';");
             sb.Append("      showStatus('Lỗi kết nối mạng', 'error');");
-            sb.Append("      console.log('Network error during upload');");
+            sb.Append("      console.log('Lỗi mạng trong quá trình tải lên');");
             sb.Append("    };");
             sb.Append("    xhr.onreadystatechange = function() {");
             sb.Append("      if (xhr.readyState === 4) {");
-            sb.Append("        console.log('Final response: ' + xhr.status + ' ' + xhr.statusText);");
+            sb.Append("        console.log('Phản hồi cuối cùng: ' + xhr.status + ' ' + xhr.statusText);");
             sb.Append("      }");
             sb.Append("    };");
             sb.Append("    uploadBtn.disabled = true; clearBtn.disabled = true;");
             sb.Append("    showStatus('Đang tải lên ' + selectedFiles.length + ' tập tin...', 'success');");
-            sb.Append("    console.log('Starting upload with ' + selectedFiles.length + ' files');");
+            sb.Append("    console.log('Đang bắt đầu tải lên với' + selectedFiles.length + ' files');");
             sb.Append("    xhr.send(formData);");
             sb.Append("  };");
             sb.Append("})();");
@@ -1803,7 +1854,7 @@ namespace ShareFile
             }
         }
 
-       
+
         private async Task SendSuccessResponse(HttpListenerContext context, List<string> uploadedFiles, List<string> failedFiles)
         {
             // Kiểm tra lại file để đảm bảo không bị hỏng
@@ -1885,6 +1936,6 @@ namespace ShareFile
             string invalidChars = Regex.Escape(new string(Path.GetInvalidFileNameChars()));
             string safe = Regex.Replace(fileName, $"[{invalidChars}]", "_");
             return FixVietnameseCharacters(safe);
-        }          
+        }
     }
 }
