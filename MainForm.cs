@@ -691,10 +691,10 @@ namespace ShareFile
                 .Replace("%2F", "/")
                 .Replace("%5B", "[")
                 .Replace("%5D", "]")
-                .Replace("%20", "~")
+                //.Replace("%20", "~")
                 .Replace("%21", "!")
-                .Replace("%40", "@");
-
+                .Replace("%40", "@")
+                .Replace("%2C", ",")
                 //.Replace("%21", "!")
                 //.Replace("%40", "@")
                 //.Replace("%23", "~hash~");
@@ -710,7 +710,7 @@ namespace ShareFile
                 //.Replace("%7D", "}")
                 //.Replace("%5B", "[")
                 //.Replace("%5D", "]");
-
+                ;
             // Encode URL
             return encoded;
         }
@@ -734,9 +734,9 @@ namespace ShareFile
                 .Replace("[", "%5B")
                 .Replace("]", "%5D")
                 .Replace("!", "%21")
-                .Replace("~", "%20")
-                .Replace("@", "%40");
-
+                //.Replace("~", "%20")
+                .Replace("@", "%40")
+                .Replace(",", "%2C")
                 //.Replace("!", "%21")
                 //.Replace("@", "%40")
                 //.Replace("#", "%23")
@@ -752,7 +752,7 @@ namespace ShareFile
                 //.Replace("}", "%7D")
                 //.Replace("[", "%5B")
                 //.Replace("]", "%5D");
-
+                ;
             // Decode URL
             return Uri.UnescapeDataString(decoded);
         }
@@ -1100,7 +1100,7 @@ namespace ShareFile
             }
         }
 
-        // Replace the GenerateDirectoryListingHtml method with this improved version:
+        // Tạo ra một trang HTML liệt kê nội dung thư mục
         private string GenerateDirectoryListingHtml(string currentPath, string relativePath)
         {
             var sb = new StringBuilder();
@@ -1112,15 +1112,18 @@ namespace ShareFile
             sb.Append("<title>Danh sách tập tin</title>");
             sb.Append("<style>");
             sb.Append("body{font-family:Arial, sans-serif; margin:20px;}");
-            sb.Append("table{border-collapse:collapse; width:100%;}");
-            sb.Append("th,td{border:1px solid #ccc; padding:8px; text-align:left;}");
+            sb.Append("main{width:85%; margin: 0 auto;}"); // ← Chỉnh sửa: Thêm một thẻ main để bao quanh nội dung và đặt chiều rộng 70%
+            sb.Append("table{border-collapse:collapse; width:100%;}"); // ← Chỉnh sửa: Đặt width: 100% để nó lấp đầy thẻ main
+            sb.Append("th,td{border:1px solid #ccc; padding:6px; text-align:left;font-size: 14px; font-family: Consolas, monospace;}");
             sb.Append("th{background:#f4f4f4;}");
             sb.Append("tr:nth-child(even){background:#fafafa;}");
             sb.Append("a{text-decoration:none; color:#0366d6;}");
             sb.Append("a:hover{text-decoration:underline;}");
+            sb.Append("h2 { font-size: 18px; font-family: Consolas, monospace; }");
             sb.Append("</style>");
             sb.Append("</head>");
             sb.Append("<body>");
+            sb.Append("<main>"); // ← Thêm thẻ main để bao bọc
             sb.AppendFormat("<h2>Thư mục: {0}</h2>", WebUtility.HtmlEncode(relativePath));
 
             sb.Append("<table>");
@@ -1130,10 +1133,10 @@ namespace ShareFile
             if (relativePath != "/")
             {
                 string parentRelative = Path.GetDirectoryName(relativePath.TrimEnd(Path.DirectorySeparatorChar, '/'))
-                                       ?.Replace("\\", "/");
+                                        ?.Replace("\\", "/");
                 if (string.IsNullOrEmpty(parentRelative)) parentRelative = "/";
 
-                string encodedParent = SafeEncode(parentRelative); // ← Sử dụng SafeEncode
+                string encodedParent = SafeEncode(parentRelative);
 
                 sb.Append("<tr>");
                 sb.AppendFormat("<td colspan=\"3\"><a href=\"{0}\">↩ Quay lại</a></td>", encodedParent);
@@ -1145,7 +1148,7 @@ namespace ShareFile
             {
                 string dirName = Path.GetFileName(dir);
                 string urlPath = (relativePath.TrimEnd('/') + "/" + dirName).Replace("\\", "/");
-                string encodedPath = SafeEncode(urlPath); // ← Sử dụng SafeEncode thay vì WebUtility.HtmlEncode
+                string encodedPath = SafeEncode(urlPath);
 
                 sb.Append("<tr>");
                 sb.AppendFormat("<td><a href=\"{0}\">📁 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(dirName));
@@ -1159,7 +1162,7 @@ namespace ShareFile
             {
                 string fileName = Path.GetFileName(file);
                 string urlPath = (relativePath.TrimEnd('/') + "/" + fileName).Replace("\\", "/");
-                string encodedPath = SafeEncode(urlPath); // ← Sử dụng SafeEncode thay vì WebUtility.HtmlEncode
+                string encodedPath = SafeEncode(urlPath);
 
                 FileInfo fi = new FileInfo(file);
                 string sizeStr = FormatFileSize(fi.Length);
@@ -1173,6 +1176,7 @@ namespace ShareFile
             }
 
             sb.Append("</table>");
+            sb.Append("</main>"); // ← Đóng thẻ main
             sb.Append("</body></html>");
             return sb.ToString();
         }
