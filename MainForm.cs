@@ -1100,87 +1100,7 @@ namespace ShareFile
             }
         }
 
-        // Tạo ra một trang HTML liệt kê nội dung thư mục
-        private string GenerateDirectoryListingHtml(string currentPath, string relativePath)
-        {
-            var sb = new StringBuilder();
-            sb.Append("<!DOCTYPE html>");
-            sb.Append("<html lang=\"vi\">");
-            sb.Append("<head>");
-            sb.Append("<meta charset=\"UTF-8\">");
-            sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
-            sb.Append("<title>Danh sách tập tin</title>");
-            sb.Append("<style>");
-            sb.Append("body{font-family:Arial, sans-serif; margin:20px;}");
-            sb.Append("main{width:85%; margin: 0 auto;}"); // ← Chỉnh sửa: Thêm một thẻ main để bao quanh nội dung và đặt chiều rộng 70%
-            sb.Append("table{border-collapse:collapse; width:100%;}"); // ← Chỉnh sửa: Đặt width: 100% để nó lấp đầy thẻ main
-            sb.Append("th,td{border:1px solid #ccc; padding:6px; text-align:left;font-size: 14px; font-family: Consolas, monospace;}");
-            sb.Append("th{background:#f4f4f4;}");
-            sb.Append("tr:nth-child(even){background:#fafafa;}");
-            sb.Append("a{text-decoration:none; color:#0366d6;}");
-            sb.Append("a:hover{text-decoration:underline;}");
-            sb.Append("h2 { font-size: 18px; font-family: Consolas, monospace; }");
-            sb.Append("</style>");
-            sb.Append("</head>");
-            sb.Append("<body>");
-            sb.Append("<main>"); // ← Thêm thẻ main để bao bọc
-            sb.AppendFormat("<h2>Thư mục: {0}</h2>", WebUtility.HtmlEncode(relativePath));
-
-            sb.Append("<table>");
-            sb.Append("<tr><th>Tên</th><th>Kích thước</th><th>Type</th></tr>");
-
-            // Thư mục cha
-            if (relativePath != "/")
-            {
-                string parentRelative = Path.GetDirectoryName(relativePath.TrimEnd(Path.DirectorySeparatorChar, '/'))
-                                        ?.Replace("\\", "/");
-                if (string.IsNullOrEmpty(parentRelative)) parentRelative = "/";
-
-                string encodedParent = SafeEncode(parentRelative);
-
-                sb.Append("<tr>");
-                sb.AppendFormat("<td colspan=\"3\"><a href=\"{0}\">↩ Quay lại</a></td>", encodedParent);
-                sb.Append("</tr>");
-            }
-
-            // Danh sách thư mục con
-            foreach (var dir in Directory.GetDirectories(currentPath))
-            {
-                string dirName = Path.GetFileName(dir);
-                string urlPath = (relativePath.TrimEnd('/') + "/" + dirName).Replace("\\", "/");
-                string encodedPath = SafeEncode(urlPath);
-
-                sb.Append("<tr>");
-                sb.AppendFormat("<td><a href=\"{0}\">📁 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(dirName));
-                sb.Append("<td>-</td>");
-                sb.Append("<td>Thư mục</td>");
-                sb.Append("</tr>");
-            }
-
-            // Danh sách file
-            foreach (var file in Directory.GetFiles(currentPath))
-            {
-                string fileName = Path.GetFileName(file);
-                string urlPath = (relativePath.TrimEnd('/') + "/" + fileName).Replace("\\", "/");
-                string encodedPath = SafeEncode(urlPath);
-
-                FileInfo fi = new FileInfo(file);
-                string sizeStr = FormatFileSize(fi.Length);
-                string extension = Path.GetExtension(file).ToLower();
-
-                sb.Append("<tr>");
-                sb.AppendFormat("<td><a href=\"{0}\">📄 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(fileName));
-                sb.AppendFormat("<td>{0}</td>", sizeStr);
-                sb.AppendFormat("<td>{0}</td>", extension);
-                sb.Append("</tr>");
-            }
-
-            sb.Append("</table>");
-            sb.Append("</main>"); // ← Đóng thẻ main
-            sb.Append("</body></html>");
-            return sb.ToString();
-        }
-
+        
         private string FormatFileSize(long bytes)
         {
             if (bytes < 1024)
@@ -1428,6 +1348,89 @@ namespace ShareFile
                 return "SHAREFILE";
             }
         }
+
+        // Tạo ra một trang HTML liệt kê nội dung thư mục
+        private string GenerateDirectoryListingHtml(string currentPath, string relativePath)
+        {
+            var sb = new StringBuilder();
+            sb.Append("<!DOCTYPE html>");
+            sb.Append("<html lang=\"vi\">");
+            sb.Append("<head>");
+            sb.Append("<meta charset=\"UTF-8\">");
+            sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">");
+            sb.Append("<title>Danh sách tập tin</title>");
+            sb.Append("<style>");
+            sb.Append("body{font-family:Arial, sans-serif; margin:20px;}");
+            sb.Append("main{width:85%; margin: 0 auto;}"); // ← Chỉnh sửa: Thêm một thẻ main để bao quanh nội dung và đặt chiều rộng 70%
+            sb.Append("table{border-collapse:collapse; width:100%;}"); // ← Chỉnh sửa: Đặt width: 100% để nó lấp đầy thẻ main
+            sb.Append("th,td{border:1px solid #ccc; padding:6px; text-align:left;font-size: 15px; font-weight: Regular; font-family: 'Roboto',Segoe UI, Arial, sans-serif;}");
+            sb.Append("th{background:#f4f4f4;}");
+            sb.Append("tr:nth-child(even){background:#fafafa;}");
+            sb.Append("a{text-decoration:none; color:#0366d6;}");
+            sb.Append("a:hover{text-decoration:underline;}");
+            sb.Append("h2 { font-size: 18px; font-family: 'Roboto',Segoe UI, Arial, sans-serif;}");
+            sb.Append("</style>");
+            sb.Append("</head>");
+            sb.Append("<body>");
+            sb.Append("<main>"); // ← Thêm thẻ main để bao bọc
+            sb.AppendFormat("<h2>Thư mục: {0}</h2>", WebUtility.HtmlEncode(relativePath));
+
+            sb.Append("<table>");
+            sb.Append("<tr><th>Tên</th><th>Kích thước</th><th>Type</th></tr>");
+
+            // Thư mục cha
+            if (relativePath != "/")
+            {
+                string parentRelative = Path.GetDirectoryName(relativePath.TrimEnd(Path.DirectorySeparatorChar, '/'))
+                                        ?.Replace("\\", "/");
+                if (string.IsNullOrEmpty(parentRelative)) parentRelative = "/";
+
+                string encodedParent = SafeEncode(parentRelative);
+
+                sb.Append("<tr>");
+                sb.AppendFormat("<td colspan=\"3\"><a href=\"{0}\">↩ Quay lại</a></td>", encodedParent);
+                sb.Append("</tr>");
+            }
+
+            // Danh sách thư mục con
+            foreach (var dir in Directory.GetDirectories(currentPath))
+            {
+                string dirName = Path.GetFileName(dir);
+                string urlPath = (relativePath.TrimEnd('/') + "/" + dirName).Replace("\\", "/");
+                string encodedPath = SafeEncode(urlPath);
+
+                sb.Append("<tr>");
+                sb.AppendFormat("<td><a href=\"{0}\">📁 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(dirName));
+                sb.Append("<td>-</td>");
+                sb.Append("<td>Thư mục</td>");
+                sb.Append("</tr>");
+            }
+
+            // Danh sách file
+            foreach (var file in Directory.GetFiles(currentPath))
+            {
+                string fileName = Path.GetFileName(file);
+                string urlPath = (relativePath.TrimEnd('/') + "/" + fileName).Replace("\\", "/");
+                string encodedPath = SafeEncode(urlPath);
+
+                FileInfo fi = new FileInfo(file);
+                string sizeStr = FormatFileSize(fi.Length);
+                string extension = Path.GetExtension(file).ToLower();
+
+                sb.Append("<tr>");
+                sb.AppendFormat("<td><a href=\"{0}\">📄 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(fileName));
+                sb.AppendFormat("<td>{0}</td>", sizeStr);
+                sb.AppendFormat("<td>{0}</td>", extension);
+                sb.Append("</tr>");
+            }
+
+            sb.Append("</table>");
+            sb.Append("</main>"); // ← Đóng thẻ main
+            sb.Append("</body></html>");
+            return sb.ToString();
+        }
+
+        //Trang hiển thị upload tập tin
         private string GenerateUploadPageHtml()
         {
             var sb = new StringBuilder();
@@ -1450,7 +1453,7 @@ namespace ShareFile
             sb.Append(".upload-zone.dragover { border-color: #007bff; background: #d0e6ff; }");
             sb.Append(".upload-icon { font-size: 36px; color: #007bff; margin-bottom: 10px; }");
             sb.Append(".upload-text { font-size: 16px; color: #333; }");
-            sb.Append(".upload-subtext { font-size: 12px; color: #666; margin-top: 5px; }");
+            sb.Append(".upload-subtext { font-size: 14px; color: #666; margin-top: 5px; }");
             sb.Append(".file-list { margin: 15px 0; max-height: 200px; overflow-y: auto; }");
             sb.Append(".file-item { display: flex; align-items: center; padding: 8px; margin-bottom: 5px; background: #f5f5f5; border-radius: 4px; }");
             sb.Append(".file-name { flex: 1; font-size: 14px; color: #333; }");
@@ -1652,7 +1655,7 @@ namespace ShareFile
 
             return sb.ToString();
         }
-
+        //Trang phan hoi upload thanh cong
         private string GenerateSuccessPageHtml(List<string> uploadedFiles, List<string> failedFiles)
         {
             var sb = new StringBuilder();
@@ -1670,12 +1673,13 @@ namespace ShareFile
             sb.Append(".container { background: #fcfcfc; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
             sb.Append(".header { text-align: center; margin-bottom: 20px; }");
             sb.Append(".header h1 { font-size: 24px; color: #228B22; }");
+            sb.Append("h3 { font-size: 16px; margin-bottom: 10px; }"); // ← Thêm cỡ chữ cho tiêu đề h3
             sb.Append("ul { list-style-type: none; padding: 0; }");
-            sb.Append("li { padding: 10px; margin-bottom: 5px; border-radius: 4px; }");
+            sb.Append("li { padding: 10px; margin-bottom: 5px; border-radius: 5px; font-size: 14px; }"); // ← Thêm cỡ chữ 14px cho danh sách file
             sb.Append(".success { background: #d4edda; color: #155724; }");
             sb.Append(".error { background: #f8d7da; color: #721c24; }");
             sb.Append(".button-group { text-align: center; margin-top: 20px; }");
-            sb.Append(".button { display: inline-block; padding: 8px 8px; margin: 0 20px; border-radius: 4px; text-decoration: none; font-size: 16px; font-weight: Reguler; cursor: pointer; transition: background-color 0.3s; }");
+            sb.Append(".button { display: inline-block; padding: 8px 8px; margin: 0 20px; border-radius: 4px; text-decoration: none; font-size: 14px; font-weight: Reguler; cursor: pointer; transition: background-color 0.3s; font-family: 'Segoe UI', Arial, sans-serif; }");
             sb.Append(".button-upload { background: #28a745; color: #fff; }");
             sb.Append(".button-upload:hover { background: #218838; }");
             sb.Append(".button-back { background: #007bff; color: #fff; }");
@@ -1690,7 +1694,7 @@ namespace ShareFile
 
             if (uploadedFiles.Any())
             {
-                sb.Append("<h3>𓆰 Đã tải lên thành công file:</h3>");
+                sb.Append("<h3>𓆰 Tập tin đã tải lên thành công:</h3>");
                 sb.Append("<ul>");
                 foreach (var file in uploadedFiles)
                 {
