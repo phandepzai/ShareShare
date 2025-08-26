@@ -846,7 +846,7 @@ namespace ShareFile
 
             public void WritePartDataTo(Stream outputStream)
             {
-                byte[] buffer = new byte[8192];
+                byte[] buffer = new byte[32768];
                 int bytesInBuffer = 0;
                 int keepTail = Math.Max(_boundaryBytes.Length, _boundaryEndBytes.Length) + 2;
                 byte[] tail = new byte[keepTail];
@@ -1804,7 +1804,7 @@ namespace ShareFile
                             FileMode.Create,
                             FileAccess.Write,
                             FileShare.None,
-                            8192,
+                            32768,
                             FileOptions.Asynchronous))
                         {
                             parser.WritePartDataTo(fileStream);
