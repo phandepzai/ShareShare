@@ -435,23 +435,24 @@ namespace ShareFile
                 string localIP = GetLocalIPAddress();
                 string computerName = GetComputerName();
 
-                UpdateLog("═".PadRight(45, '═'));
-                UpdateLog("🖥️  ỨNG DỤNG ĐÃ BẮT ĐẦU CHIA SẺ");
-                UpdateLog("═".PadRight(45, '═'));
-                UpdateLog($"📍 Địa chỉ IP: {localIP}");
-                UpdateLog($"📍 Port: {port}");
-                UpdateLog($"📍 Tên máy tính: {computerName}");
-                UpdateLog("");
-                UpdateLog("🌐 TRUY CẬP TỪ TRÌNH DUYỆT:");
-                UpdateLog($"   http://{localIP}:{port}");
-                UpdateLog($"   http://{computerName}:{port}");
-                UpdateLog("");
-                UpdateLog("📁 TRUY CẬP TỪ TRÌNH DUYỆT:");
-                UpdateLog($"   http://{localIP}:{port}/upload");
-                UpdateLog($"   Để upload chia sẻ file");
-                UpdateLog("");
-                UpdateLog("✅ Có thể truy cập từ các thiết bị trong mạng LAN");
-                UpdateLog("═".PadRight(45, '═'));
+                UpdateLog("╔════════════════════════════════╗");
+                UpdateLog("║           ► ỨNG DỤNG ĐÃ KHỞI ĐỘNG                         ║");
+                UpdateLog("╚════════════════════════════════╝");
+                UpdateLog($"📍 Địa chỉ IP:          {localIP}");
+                UpdateLog($"📍 Port:                   {port}");
+                UpdateLog($"📍 Tên máy tính:     {computerName}");
+                UpdateLog("══════════════════════════════════");
+                UpdateLog("🌐 Truy cập từ trình duyệt:");
+                UpdateLog($"   ➜ http://{localIP}:{port}");
+                UpdateLog($"   ➜ http://{computerName}:{port}");
+                UpdateLog("══════════════════════════════════");
+                UpdateLog("🌐 Truy cập chức năng khác:");
+                UpdateLog($"   ➜ http://{localIP}:{port}/upload");
+                UpdateLog($"       (Upload & chia sẻ file)");
+                UpdateLog($"   ➜ http://{localIP}:{port}/time");
+                UpdateLog("        (Xem đồng hồ & lịch)");
+                UpdateLog("✅ Có thể truy cập từ các thiết bị khác trong mạng LAN");
+                UpdateLog("══════════════════════════════════");
 
                 notifyIcon.Text = $"Đang chia sẻ: {localIP}:{port}";
 
@@ -559,6 +560,22 @@ namespace ShareFile
                 await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                 context.Response.OutputStream.Close();
                 UpdateLog($"[{clientIp}] Đã truy cập trang upload file.");
+                return;
+            }
+            // Trang đồng hồ & lịch
+            if (context.Request.HttpMethod == "GET" &&
+                string.Equals(relativePath, "/time", StringComparison.OrdinalIgnoreCase)||
+                string.Equals(relativePath, "/clock", StringComparison.OrdinalIgnoreCase)||
+                string.Equals(relativePath, "/t", StringComparison.OrdinalIgnoreCase)
+                )
+            {
+                string htmlContent = GetTimePageHtml();
+                byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+                context.Response.ContentType = "text/html; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.LongLength;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+                UpdateLog($"[{clientIp}] Đã truy cập trang time.");
                 return;
             }
 
@@ -708,14 +725,549 @@ namespace ShareFile
             }
         }
 
+        #region Calendar & Clock
+        // Trang đồng hồ & lịch 
+        private string GetTimePageHtml()
+        {
+            return @"<!DOCTYPE html>
+            <html lang='vi'>
+            <head>
+                <meta charset='UTF-8'>
+                <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <title>Đồng hồ & Lịch</title>
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+        
+                    body {
+                        font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+                        background: linear-gradient(135deg, #1f3c54, #173d5c);
+                        color: #f5f5f5;
+                        min-height: 100vh;
+                        padding: 20px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+        
+                    .container {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 30px;
+                        justify-content: center;
+                        max-width: 1200px;
+                        width: 100%;
+                        margin-top: 50px;
+                    }
+        
+                    .card {
+                        background: rgba(255, 255, 255, 0.08);
+                        backdrop-filter: blur(10px);
+                        border-radius: 20px;
+                        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+                        padding: 25px;
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                    }
+        
+                    .title {
+                        font-weight: 600;
+                        margin: 0 0 20px 0;
+                        text-align: center;
+                        font-size: 1.4rem;
+                        color: #e0e0e0;
+                        letter-spacing: 1px;
+                    }
+        
+                    /* Thiết kế khối đồng hồ */
+                    .clock-container {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: center;
+                    }
+        
+                    .clock {
+                        position: relative;
+                        width: 280px;
+                        height: 280px;
+                        border-radius: 50%;
+                        background: rgba(0, 0, 0, 0.3);
+                        border: 8px solid rgba(255, 255, 255, 0.1);
+                        box-shadow: 
+                            inset 0 0 25px rgba(0, 0, 0, 0.5),
+                            0 5px 15px rgba(0, 0, 0, 0.3);
+                    }
+        
+                    /* Số của đồng hồ */
+                    .number {
+                        position: absolute;
+                        width: 100%;
+                        height: 100%;
+                        text-align: center;
+                        font-weight: 600;
+                        font-size: 16px;
+                        color: rgba(255, 255, 255, 0.9);
+                        transform-origin: center;
+                    }
+        
+                    /* Tích tắc của đồng hồ */
+                    .tick {
+                        position: absolute;
+                        left: 50%;
+                        top: 0;
+                        transform-origin: 50% 132px;
+                        background: rgba(255, 255, 255, 0.7);
+                    }
+        
+                    .tick.major {
+                        width: 3px;
+                        height: 12px;
+                        background: rgba(255, 255, 255, 0.9);
+                    }
+        
+                    .tick.minor {
+                        width: 1px;
+                        height: 6px;
+                        background: rgba(255, 255, 255, 0.5);
+                    }
+        
+                    /* Kim đồng hồ */
+                    .hand {
+                        position: absolute;
+                        left: 50%;
+                        top: 50%;
+                        border-radius: 5px;
+                        box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+                        z-index: 5;
+                    }
+        
+                    .hand.hour {
+                        width: 70px;
+                        height: 6px;
+                        background: #ff9800;
+                        transform-origin: 0 50%;
+                        margin-top: -3px;
+                    }
+        
+                    .hand.minute {
+                        width: 95px;
+                        height: 4px;
+                        background: #2196f3;
+                        transform-origin: 0 50%;
+                        margin-top: -2px;
+                    }
+        
+                    .hand.second {
+                        width: 110px;
+                        height: 2px;
+                        background: #f44336;
+                        transform-origin: 0 50%;
+                        margin-top: -1px;
+                    }
+        
+                    .center-dot {
+                        position: absolute;
+                        left: 50%;
+                        top: 50%;
+                        width: 12px;
+                        height: 12px;
+                        border-radius: 50%;
+                        background: #f5f5f5;
+                        transform: translate(-50%, -50%);
+                        box-shadow: 0 0 8px rgba(0, 0, 0, 0.5);
+                        z-index: 10;
+                    }
+        
+                    .digital-time {
+                        margin-top: 20px;
+                        font-size: 1.5rem;
+                        font-weight: 500;
+                        letter-spacing: 2px;
+                        color: rgba(255, 255, 255, 0.9);
+                        background: rgba(0, 0, 0, 0.2);
+                        padding: 8px 15px;
+                        border-radius: 10px;
+                    }
+        
+                    /* Kiểu dáng lịch */
+                    .calendar {
+                        width: 520px;
+                        max-width: 100%;
+                    }
+        
+                    .cal-head {
+                        display: flex;
+                        align-items: center;
+                        justify-content: space-between;
+                        margin-bottom: 15px;
+                    }
+        
+                    .btn {
+                        user-select: none;
+                        cursor: pointer;
+                        background: rgba(255, 255, 255, 0.1);
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                        border-radius: 10px;
+                        padding: 8px 15px;
+                        color: #e0e0e0;
+                        transition: all 0.2s;
+                    }
+        
+                    .btn:hover {
+                        background: rgba(255, 255, 255, 0.2);
+                    }
+        
+                    .month-label {
+                        font-size: 1.3rem;
+                        font-weight: 600;
+                        letter-spacing: 0.5px;
+                        color: rgba(255, 255, 255, 0.9);
+                    }
+        
+                    table.cal {
+                        width: 100%;
+                        border-collapse: separate;
+                        border-spacing: 6px;
+                    }
+        
+                    table.cal th, table.cal td {
+                        text-align: center;
+                        padding: 10px 0;
+                        border-radius: 10px;
+                    }
+        
+                    table.cal thead th {
+                        font-weight: 700;
+                        color: #bb86fc;
+                        background: rgba(255, 255, 255, 0.1);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                    }
+        
+                    td.day {
+                        background: rgba(255, 255, 255, 0.05);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        color: rgba(255, 255, 255, 0.8);
+                        transition: all 0.2s;
+                    }
+        
+                    td.day:hover {
+                        background: rgba(255, 255, 255, 0.1);
+                    }
+        
+                    td.muted {
+                        opacity: 0.3;
+                    }
+        
+                    td.today {
+                        background: #2196f3;
+                        border-color: #64b5f6;
+                        color: #fff;
+                        font-weight: 700;
+                        box-shadow: 0 0 10px rgba(33, 150, 243, 0.5);
+                    }
+        
+                    /* Thêm style cho ngày Chủ Nhật */
+                    td.sunday {
+                        color: #f44336 !important;
+                        font-weight: bold;
+                    }
+        
+                    .legend {
+                        margin-top: 25px;
+                        font-size: 1.1rem; /* Đã tăng cỡ chữ */
+                        font-weight: bold; /* Đã thêm để chữ nổi bật */
+                        color: rgba(255, 255, 255, 0.7);
+                        text-align: center;
+                    }
+        
+                    .footer {
+                        position: fixed;
+                        bottom: 0;
+                        width: 100%;
+                        padding: 10px 0;
+                        font-size: 0.8rem;
+                        color: #a9a9a9;
+                        font-style: italic;
+                        text-align: center;
+                        linear-gradient(135deg, #1f3c54, #173d5c);
+                        backdrop-filter: blur(5px);
+                        z-index: 999;
+                    }
+        
+                    @media (max-width: 768px) {
+                        .container {
+                            flex-direction: column;
+                            align-items: center;
+                        }
+            
+                        .calendar {
+                            width: 100%;
+                        }
+            
+                        .clock {
+                            width: 240px;
+                            height: 240px;
+                        }
+            
+                        .tick {
+                            transform-origin: 50% 120px;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <div class='card clock-container'>
+                        <h2 class='title'>Đồng hồ</h2>
+                        <div class='clock' id='clock'>
+                            <div class='hand hour' id='h'></div>
+                            <div class='hand minute' id='m'></div>
+                            <div class='hand second' id='s'></div>
+                            <div class='center-dot'></div>
+                        </div>
+                        <div class='digital-time' id='digitalTime'>00:00:00</div>
+                    </div>
+        
+                    <div class='card calendar'>
+                        <div class='cal-head'>
+                            <div class='btn' id='prev' onclick='shiftMonth(-1)' aria-label='Tháng trước'>&larr;</div>
+                            <div class='month-label' id='monthLabel'>Tháng</div>
+                            <div class='btn' id='next' onclick='shiftMonth(1)' aria-label='Tháng sau'>&rarr;</div>
+                        </div>
+                        <table class='cal' aria-label='Lịch tháng'>
+                            <thead>
+                                <tr>
+                                    <th>T2</th><th>T3</th><th>T4</th><th>T5</th><th>T6</th><th>T7</th><th style='color: #f44336;'>CN</th>
+                                </tr>
+                            </thead>
+                            <tbody id='calBody'></tbody>
+                        </table>
+                        <div class='legend' id='todayLegend'></div>
+                        <div class='legend' id='lunarLegend'></div>
+                    </div>
+                </div>
+    
+                <div class='footer'>Thiết kế bởi Nông Văn Phấn®</div>
+    
+                <script>
+                    // ===== ĐỒNG HỒ =====
+                    function createClockElements() {
+                        const clock = document.getElementById('clock');
+                        const clockSize = 280; // Kích thước đồng hồ
+                        const radius = clockSize / 2; // Bán kính
+            
+                        // Tạo vạch chia phút
+                        for (let i = 0; i < 60; i++) {
+                            const tick = document.createElement('div');
+                            tick.className = 'tick ' + (i % 5 === 0 ? 'major' : 'minor');
+                            const angle = i * 6; // 6 độ cho mỗi phút
+                            tick.style.transform = 'rotate(' + angle + 'deg)';
+                            clock.appendChild(tick);
+                        }
+            
+                        // Tạo các số giờ
+                        const numbers = [12, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+                        const numberRadius = radius - 30; // Khoảng cách từ tâm đến số
+                        numbers.forEach((num, i) => {
+                            const number = document.createElement('div');
+                            number.className = 'number';
+                            number.innerHTML = num;
+                            const angle = (i - 3) * 30; // Mỗi số cách nhau 30 độ
+                            const radian = angle * Math.PI / 180;
+                            const x = Math.cos(radian) * numberRadius;
+                            const y = Math.sin(radian) * numberRadius;
+                            number.style.position = 'absolute';
+                            number.style.left = '50%';
+                            number.style.top = '50%';
+                            number.style.transform = 'translate(' + x + 'px, ' + y + 'px) translate(-50%, -50%)';
+                            number.style.width = '20px';
+                            number.style.height = '20px';
+                            number.style.textAlign = 'center';
+                            number.style.lineHeight = '20px';
+                            number.style.zIndex = '2';
+                            clock.appendChild(number);
+                        });
+                    }
+        
+                    // Hàm lấy thời gian theo GMT+7 (UTC+7)
+                    function getGMT7Time() {
+                        const now = new Date();
+                        const utc = new Date(now.getTime() + now.getTimezoneOffset() * 60000); // Chuyển sang UTC
+                        return new Date(utc.getTime() + 7 * 3600000); // Thêm 7 giờ cho GMT+7
+                    }
+        
+                    function updateClock() {
+                        const now = getGMT7Time(); // Sử dụng thời gian GMT+7
+                        const sec = now.getSeconds();
+                        const min = now.getMinutes();
+                        const hr = now.getHours() % 12;
+            
+                        // Chỉnh lại góc quay để kim đồng hồ bắt đầu từ 12 giờ
+                        const secDeg = (sec * 6) - 90; // 6 độ/giây, trừ 90 độ để kim thẳng đứng
+                        const minDeg = (min * 6 + sec * 0.1) - 90; // 6 độ/phút, cộng thêm góc từ giây, trừ 90 độ
+                        const hrDeg = (hr * 30 + min * 0.5) - 90; // 30 độ/giờ, cộng thêm góc từ phút, trừ 90 độ
+            
+                        document.getElementById('s').style.transform = 'rotate(' + secDeg + 'deg)';
+                        document.getElementById('m').style.transform = 'rotate(' + minDeg + 'deg)';
+                        document.getElementById('h').style.transform = 'rotate(' + hrDeg + 'deg)';
+            
+                        // Cập nhật đồng hồ số theo GMT+7
+                        const digitalTime = document.getElementById('digitalTime');
+                        digitalTime.textContent = String(now.getHours()).padStart(2, '0') + ':' + String(min).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+                    }
+        
+                    // Khởi tạo đồng hồ
+                    createClockElements();
+                    updateClock();
+                    setInterval(updateClock, 500);
+        
+                    // ===== LỊCH =====
+                    let viewMonth, viewYear;
+                    const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+                    const lunarMonthNames = ['Một', 'Hai', 'Ba', 'Tư', 'Năm', 'Sáu', 'Bảy', 'Tám', 'Chín', 'Mười', 'Mười một', 'Chạp'];
+                    const canChiDay = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'];
+                    const canChiYear = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tị', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
+        
+                    // Hàm chuyển đổi dương lịch sang âm lịch (phiên bản minh họa)
+                    function toLunarDate(solarDate) {
+                        // Đây là một hàm đơn giản và không chính xác hoàn toàn.
+                        // Để có lịch âm chính xác, bạn cần sử dụng một thư viện chuyên dụng.
+                        const day = solarDate.getDate();
+                        const month = solarDate.getMonth() + 1;
+                        const year = solarDate.getFullYear();
+            
+                        // Giả lập một cách tính đơn giản (không chính xác)
+                        const lunarDay = (day + 7) % 30 || 30; 
+                        const lunarMonth = (month + 10) % 12 || 12;
+                        const lunarYear = (year + 7) % 12;
+            
+                        return 'Ngày ' + lunarDay + ', ' + 'Tháng ' + lunarMonth;
+                    }
+        
+                    function pad(n) {
+                        return (n < 10 ? '0' : '') + n;
+                    }
+        
+                    function renderCalendar(y, m) {
+                        const today = new Date();
+                        const isThisMonth = (y === today.getFullYear() && m === today.getMonth());
+                        const tbody = document.getElementById('calBody');
+                        const label = document.getElementById('monthLabel');
+                        const legend = document.getElementById('todayLegend');
+                        const lunarLegend = document.getElementById('lunarLegend');
+            
+                        label.textContent = monthNames[m] + ' ' + y;
+            
+                        // Xóa nội dung cũ
+                        tbody.innerHTML = '';
+            
+                        // Tính toán ngày
+                        const first = new Date(y, m, 1);
+                        const daysInMonth = new Date(y, m + 1, 0).getDate();
+                        const daysInPrevMonth = new Date(y, m, 0).getDate();
+            
+                        // 0=Chủ nhật, 1=Thứ 2, ... 6=Thứ 7
+                        let startDayOfWeek = first.getDay(); 
+                        // Điều chỉnh để Thứ Hai là ngày đầu tiên (0), ..., Chủ Nhật là ngày cuối cùng (6)
+                        if (startDayOfWeek === 0) {
+                            startDayOfWeek = 6;
+                        } else {
+                            startDayOfWeek--;
+                        }
+            
+                        let date = 1;
+                        for (let i = 0; i < 6; i++) { // Tối đa 6 hàng tuần
+                            let tr = document.createElement('tr');
+                            for (let j = 0; j < 7; j++) { // 7 ngày trong tuần
+                                const td = document.createElement('td');
+                                let displayDay;
+                                let isMuted = false;
+                    
+                                if (i === 0 && j < startDayOfWeek) {
+                                    // Ngày của tháng trước
+                                    displayDay = daysInPrevMonth - startDayOfWeek + j + 1;
+                                    isMuted = true;
+                                } else if (date > daysInMonth) {
+                                    // Ngày của tháng sau
+                                    displayDay = date - daysInMonth;
+                                    isMuted = true;
+                                    date++;
+                                } else {
+                                    // Ngày trong tháng hiện tại
+                                    displayDay = date;
+                                    date++;
+                                }
+                    
+                                td.textContent = displayDay;
+                                td.className = 'day';
+                    
+                                if (isMuted) {
+                                    td.classList.add('muted');
+                                }
+                    
+                                // Kiểm tra và thêm class 'today'
+                                if (!isMuted && isThisMonth && displayDay === today.getDate()) {
+                                    td.classList.add('today');
+                                }
+                    
+                                // Kiểm tra và thêm class 'sunday' (cột cuối cùng)
+                                if (j === 6) { 
+                                    td.classList.add('sunday');
+                                }
+                    
+                                tr.appendChild(td);
+                            }
+                            tbody.appendChild(tr);
+                            if (date > daysInMonth && i >= 4) break; // Thoát nếu đã render hết các ngày
+                        }
+            
+                        // Chú thích hôm nay
+                        const txt = 'Hôm nay: ' + pad(today.getDate()) + '/' + pad(today.getMonth() + 1) + '/' + today.getFullYear();
+                        legend.textContent = txt;
+            
+                        // Hiển thị ngày âm lịch
+                        //const lunarDateStr = toLunarDate(today);
+                        //lunarLegend.textContent = 'Âm lịch: ' + lunarDateStr;
+                    }
+        
+                    function shiftMonth(delta) {
+                        viewMonth += delta;
+                        if (viewMonth < 0) {
+                            viewMonth = 11;
+                            viewYear--;
+                        } else if (viewMonth > 11) {
+                            viewMonth = 0;
+                            viewYear++;
+                        }
+                        renderCalendar(viewYear, viewMonth);
+                    }
+        
+                    // Khởi tạo lịch
+                    (function() {
+                        const now = new Date();
+                        viewMonth = now.getMonth();
+                        viewYear = now.getFullYear();
+                        renderCalendar(viewYear, viewMonth);
+                    })();
+                </script>
+            </body>
+            </html>";
+        }
+        #endregion
+
+        //Các định dạng file mở trực tiếp trên trình duyệt
         private bool ShouldDisplayInBrowser(string extension)
         {
             var browserDisplayableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                // Text files
+                // File văn bản
                 ".txt", ".html", ".htm", ".css", ".js", ".json", ".xml", ".md", ".ini",
         
-                // Image files
+                // File ảnh
                 ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico",
         
                 // PDF
@@ -749,10 +1301,10 @@ namespace ShareFile
                 .Replace("%2F", "/")
                 .Replace("%5B", "[")
                 .Replace("%5D", "]")
-                //.Replace("%20", "~")
                 .Replace("%21", "!")
                 .Replace("%40", "@")
                 .Replace("%2C", ",")
+                //.Replace("%20", "~")
                 //.Replace("%21", "!")
                 //.Replace("%40", "@")
                 //.Replace("%23", "~hash~");
@@ -792,9 +1344,9 @@ namespace ShareFile
                 .Replace("[", "%5B")
                 .Replace("]", "%5D")
                 .Replace("!", "%21")
-                //.Replace("~", "%20")
                 .Replace("@", "%40")
                 .Replace(",", "%2C")
+                //.Replace("~", "%20")
                 //.Replace("!", "%21")
                 //.Replace("@", "%40")
                 //.Replace("#", "%23")
@@ -815,6 +1367,8 @@ namespace ShareFile
             return Uri.UnescapeDataString(decoded);
         }
         #endregion
+
+        #region Xử lý upload file
         public class MultipartParser
         {
             private readonly Stream _stream;
@@ -1066,7 +1620,9 @@ namespace ShareFile
             };
             return replacements.Aggregate(input, (current, pair) => current.Replace(pair.Key, pair.Value));
         }
+        #endregion
 
+        #region LẤY NỘI DUNG FILE
         private string GetContentType(string extension)
         {
             var contentTypes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -1128,7 +1684,7 @@ namespace ShareFile
                 ? contentType
                 : "application/octet-stream";
         }
-
+        #endregion
         private void StopSharing()
         {
             if (_listener != null && _listener.IsListening)
@@ -1136,7 +1692,9 @@ namespace ShareFile
                 _listener.Stop();
                 _listener.Close();
                 _listener = null;
-                UpdateLog("\r\n--- Ứng dụng đã dừng chia sẻ ---");
+                UpdateLog("╔════════════════════════════════╗");
+                UpdateLog("║            ■ Ứng dụng đã dừng chia sẻ                            ║");
+                UpdateLog("╚════════════════════════════════╝");
             }
             notifyIcon.Text = "Ứng dụng chia sẻ file đã dừng";
             if (this.InvokeRequired)

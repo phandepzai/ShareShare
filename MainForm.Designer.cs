@@ -117,17 +117,17 @@
             // txtLog
             // 
             this.txtLog.Font = new System.Drawing.Font("Tahoma", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.txtLog.Location = new System.Drawing.Point(12, 70);
+            this.txtLog.Location = new System.Drawing.Point(12, 78);
             this.txtLog.Multiline = true;
             this.txtLog.Name = "txtLog";
             this.txtLog.ReadOnly = true;
             this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.txtLog.Size = new System.Drawing.Size(416, 230);
+            this.txtLog.Size = new System.Drawing.Size(440, 230);
             this.txtLog.TabIndex = 6;
             // 
             // MainForm
             // 
-            this.ClientSize = new System.Drawing.Size(440, 312);
+            this.ClientSize = new System.Drawing.Size(464, 312);
             this.Controls.Add(this.txtLog);
             this.Controls.Add(this.lblFolderPath);
             this.Controls.Add(this.label1);
