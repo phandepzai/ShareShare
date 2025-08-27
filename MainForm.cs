@@ -69,6 +69,28 @@ namespace ShareFile
             }
         }
 
+        // Thêm đoạn code này vào trong class MainForm của bạn
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct SHFILEINFO
+        {
+            public IntPtr hIcon;
+            public int iIcon;
+            public uint dwAttributes;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string szDisplayName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+            public string szTypeName;
+        }
+
+        private const uint SHGFI_ICON = 0x100;
+        private const uint SHGFI_USEFILEATTRIBUTES = 0x10;
+        private const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+        private const uint FILE_ATTRIBUTE_DIRECTORY = 0x10;
+
+
         public MainForm()
         {
             InitializeComponent();
@@ -127,6 +149,42 @@ namespace ShareFile
             this.Resize += new System.EventHandler(this.MainForm_Resize);
             this.FormClosing += MainForm_FormClosing;
             this.txtPort.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.txtPort_KeyPress);
+        }
+
+        private string GetIconBase64(string path, bool isDirectory)
+        {
+            uint flags = SHGFI_ICON;
+            if (isDirectory)
+            {
+                flags |= SHGFI_USEFILEATTRIBUTES;
+            }
+            else
+            {
+                flags |= SHGFI_USEFILEATTRIBUTES;
+            }
+
+            var shinfo = new SHFILEINFO();
+            IntPtr hIcon = SHGetFileInfo(
+                isDirectory ? "directory" : Path.GetFileName(path), // Dùng chuỗi "directory" để lấy icon mặc định cho thư mục
+                isDirectory ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL,
+                ref shinfo,
+                (uint)Marshal.SizeOf(shinfo),
+                flags);
+
+            if (hIcon == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            using (Icon icon = Icon.FromHandle(shinfo.hIcon))
+            {
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    icon.ToBitmap().Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    byte[] imageBytes = ms.ToArray();
+                    return "data:image/png;base64," + Convert.ToBase64String(imageBytes);
+                }
+            }
         }
 
         private void MainForm_Load(object sender, EventArgs e)
@@ -669,7 +727,7 @@ namespace ShareFile
 
             return browserDisplayableExtensions.Contains(extension);
         }
-
+        #region Endcode-Decode
         // Encode tên file/thư mục để sinh link an toàn
         private string SafeEncode(string name)
         {
@@ -756,7 +814,7 @@ namespace ShareFile
             // Decode URL
             return Uri.UnescapeDataString(decoded);
         }
-
+        #endregion
         public class MultipartParser
         {
             private readonly Stream _stream;
@@ -1246,7 +1304,148 @@ namespace ShareFile
                 UpdateLog($"[{clientIp}] WebDAV error: {ex.Message}");
             }
         }
+        #region Phương thức GetFileIcon
+        private string GetFileIcon(string fileExtension)
+        {
+            fileExtension = fileExtension.ToLower();
+            switch (fileExtension)
+            {
+                case ".pdf":
+                    return "📕"; // Sách đỏ cho file PDF
+                case ".doc":
+                case ".docx":
+                    return "📝"; // Ghi chú cho file Word
+                case ".xls":
+                case ".xlsx":
+                    return "📊"; // Biểu đồ cho file Excel
+                case ".ppt":
+                case ".pptx":
+                    return "📈"; // Biểu đồ tăng cho file PowerPoint
+                case ".jpg":
+                case ".jpeg":
+                case ".png":
+                case ".gif":
+                case ".bmp":
+                    return "🖼️"; // Khung ảnh cho file ảnh
+                case ".zip":
+                case ".rar":
+                case ".7z":
+                    return "📦"; // Hộp cho file nén
+                case ".mp3":
+                case ".wav":
+                case ".flac":
+                    return "🎵"; // Nốt nhạc cho file âm thanh
+                case ".mp4":
+                case ".avi":
+                case ".mov":
+                    return "🎬"; // Máy quay cho file video
+                case ".txt":
+                    return "🗒️"; // Cuộn giấy cho file văn bản
+                case ".html":
+                case ".htm":
+                    return "🌐"; // Địa cầu cho file web
+                case ".cs":
+                case ".js":
+                case ".json":
+                case ".xml":
+                case ".css":
+                    return "💻"; // Máy tính cho file code
+                case ".exe":
+                    return "⚙️"; // Bánh răng cho file thực thi
 
+                // Thêm các định dạng file phổ biến khác
+                case ".py":
+                    return "🐍"; // Rắn cho file Python
+                case ".java":
+                    return "☕"; // Tách cà phê cho file Java
+                case ".c":
+                case ".cpp":
+                case ".h":
+                    return "🔧"; // Cờ lê cho file C/C++
+                case ".php":
+                    return "🐘"; // Voi cho file PHP
+                case ".sql":
+                    return "🗄️"; // Tủ tài liệu cho file SQL
+                case ".md":
+                    return "📋"; // Bảng ghi chú cho Markdown
+                case ".csv":
+                    return "📊"; // Biểu đồ cho file CSV
+                case ".rtf":
+                    return "📄"; // Tài liệu cho file RTF
+                case ".log":
+                    return "📜"; // Cuộn giấy cho file log
+                case ".psd":
+                case ".ai":
+                    return "🎨"; // Bảng màu cho file thiết kế
+                case ".svg":
+                    return "🖌️"; // Cọ vẽ cho file SVG
+                case ".ttf":
+                case ".otf":
+                case ".woff":
+                    return "🔤"; // Chữ cái cho file font
+                case ".eml":
+                case ".msg":
+                    return "✉️"; // Thư cho file email
+                case ".ics":
+                    return "📅"; // Lịch cho file calendar
+                case ".torrent":
+                    return "⬇️"; // Mũi tên xuống cho file torrent
+                case ".iso":
+                case ".img":
+                case ".dmg":
+                    return "💿"; // Đĩa CD cho file disk image
+                case ".db":
+                case ".sqlite":
+                    return "🗃️"; // Thẻ chỉ mục cho file database
+                case ".bak":
+                    return "💾"; // Đĩa mềm cho file backup
+                case ".ini":
+                case ".cfg":
+                    return "⚙️"; // Bánh răng cho file cấu hình
+                case ".cer":
+                case ".crt":
+                case ".pem":
+                    return "🔒"; // Khóa cho file certificate
+                case ".pkey":
+                case ".key":
+                    return "🔑"; // Chìa khóa cho file key
+                case ".apk":
+                    return "📱"; // Điện thoại cho file APK
+                case ".dll":
+                    return "🧩"; // Mảnh ghép cho file DLL
+                case ".bat":
+                    return "🦇"; // Dơi cho file BAT
+                case ".sh":
+                    return "🔧"; // Cờ lê cho file shell
+                case ".jar":
+                case ".war":
+                    return "☕"; // Tách cà phê cho file Java archive
+                case ".swf":
+                case ".fla":
+                    return "🎬"; // Máy quay cho file Flash
+                case ".raw":
+                case ".cr2":
+                case ".nef":
+                case ".arw":
+                    return "📷"; // Máy ảnh cho file RAW
+                case ".dwg":
+                case ".dxf":
+                    return "📐"; // Thước kẻ cho file CAD
+                case ".stl":
+                    return "🖨️"; // Máy in 3D cho file STL
+                case ".step":
+                case ".stp":
+                    return "🏗️"; // Công trường xây dựng cho file STEP
+                case ".gcode":
+                    return "🖨️"; // Máy in 3D cho file G-code
+
+                default:
+                    return "🗎"; // Ký hiệu chung cho các file khác
+            }
+        }
+        #endregion
+
+        #region File Explore
         private string GenerateWebDAVPropFindResponse(string directoryPath, string relativePath)
         {
             var sb = new StringBuilder();
@@ -1349,6 +1548,9 @@ namespace ShareFile
             }
         }
 
+        #endregion
+
+        #region HTML liệt kê nội dung thư mục
         // Tạo ra một trang HTML liệt kê nội dung thư mục
         private string GenerateDirectoryListingHtml(string currentPath, string relativePath)
         {
@@ -1361,8 +1563,8 @@ namespace ShareFile
             sb.Append("<title>Danh sách tập tin</title>");
             sb.Append("<style>");
             sb.Append("body{font-family:Arial, sans-serif; margin:20px;}");
-            sb.Append("main{width:85%; margin: 0 auto;}"); // ← Chỉnh sửa: Thêm một thẻ main để bao quanh nội dung và đặt chiều rộng 70%
-            sb.Append("table{border-collapse:collapse; width:100%;}"); // ← Chỉnh sửa: Đặt width: 100% để nó lấp đầy thẻ main
+            sb.Append("main{width:75%; margin: 0 auto;}");
+            sb.Append("table{border-collapse:collapse; width:95%;}");
             sb.Append("th,td{border:1px solid #ccc; padding:6px; text-align:left;font-size: 15px; font-weight: Regular; font-family: 'Roboto',Segoe UI, Arial, sans-serif;}");
             sb.Append("th{background:#f4f4f4;}");
             sb.Append("tr:nth-child(even){background:#fafafa;}");
@@ -1372,64 +1574,71 @@ namespace ShareFile
             sb.Append("</style>");
             sb.Append("</head>");
             sb.Append("<body>");
-            sb.Append("<main>"); // ← Thêm thẻ main để bao bọc
+            sb.Append("<main>");
             sb.AppendFormat("<h2>Thư mục: {0}</h2>", WebUtility.HtmlEncode(relativePath));
 
             sb.Append("<table>");
-            sb.Append("<tr><th>Tên</th><th>Kích thước</th><th>Type</th></tr>");
+            sb.Append("<tr><th style=\"width: 60%;\">Tên</th><th style=\"width: 20%;\">Ngày sửa đổi</th><th style=\"width: 10%;\">Loại tập tin</th><th style=\"width: 10%;\">Kích thước</th></tr>");
 
             // Thư mục cha
             if (relativePath != "/")
             {
-                string parentRelative = Path.GetDirectoryName(relativePath.TrimEnd(Path.DirectorySeparatorChar, '/'))
-                                        ?.Replace("\\", "/");
+                string parentRelative = Path.GetDirectoryName(relativePath.TrimEnd(Path.DirectorySeparatorChar, '/'))?.Replace("\\", "/");
                 if (string.IsNullOrEmpty(parentRelative)) parentRelative = "/";
-
                 string encodedParent = SafeEncode(parentRelative);
 
                 sb.Append("<tr>");
-                sb.AppendFormat("<td colspan=\"3\"><a href=\"{0}\">↩ Quay lại</a></td>", encodedParent);
+                sb.AppendFormat("<td colspan=\"4\"><a href=\"{0}\">↩ Quay lại</a></td>", encodedParent);
+                //string backIcon = GetIconBase64("..", true); // Lấy icon cho thư mục
+                //sb.AppendFormat("<td colspan=\"4\"><a href=\"{0}\"><img src=\"{1}\" style=\"width:16px; height:16px; vertical-align:middle;\" /> Quay lại</a></td>", encodedParent, backIcon);
                 sb.Append("</tr>");
             }
 
             // Danh sách thư mục con
-            foreach (var dir in Directory.GetDirectories(currentPath))
+            foreach (var dir in Directory.GetDirectories(currentPath).OrderBy(d => Path.GetFileName(d)))
             {
                 string dirName = Path.GetFileName(dir);
                 string urlPath = (relativePath.TrimEnd('/') + "/" + dirName).Replace("\\", "/");
                 string encodedPath = SafeEncode(urlPath);
+                DirectoryInfo di = new DirectoryInfo(dir);
 
                 sb.Append("<tr>");
-                sb.AppendFormat("<td><a href=\"{0}\">📁 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(dirName));
-                sb.Append("<td>-</td>");
+                //sb.AppendFormat("<td><a href=\"{0}\">📁 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(dirName));
+                string folderIcon = GetIconBase64(dir, true);
+                sb.AppendFormat("<td><a href=\"{0}\"><img src=\"{1}\" style=\"width:16px; height:16px; vertical-align:middle;\" /> {2}</a></td>", encodedPath, folderIcon, WebUtility.HtmlEncode(dirName));
+                sb.AppendFormat("<td>{0}</td>", di.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"));
                 sb.Append("<td>Thư mục</td>");
+                sb.Append("<td>-</td>");               
                 sb.Append("</tr>");
             }
 
             // Danh sách file
-            foreach (var file in Directory.GetFiles(currentPath))
+            foreach (var file in Directory.GetFiles(currentPath).OrderBy(f => Path.GetFileName(f)))
             {
                 string fileName = Path.GetFileName(file);
                 string urlPath = (relativePath.TrimEnd('/') + "/" + fileName).Replace("\\", "/");
                 string encodedPath = SafeEncode(urlPath);
-
                 FileInfo fi = new FileInfo(file);
                 string sizeStr = FormatFileSize(fi.Length);
                 string extension = Path.GetExtension(file).ToLower();
 
                 sb.Append("<tr>");
-                sb.AppendFormat("<td><a href=\"{0}\">📄 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(fileName));
-                sb.AppendFormat("<td>{0}</td>", sizeStr);
+                string fileIcon = GetIconBase64(file, false);
+                sb.AppendFormat("<td><a href=\"{0}\"><img src=\"{1}\" style=\"width:16px; height:16px; vertical-align:middle;\" /> {2}</a></td>", encodedPath, fileIcon, WebUtility.HtmlEncode(fileName));
+                sb.AppendFormat("<td>{0}</td>", fi.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"));
                 sb.AppendFormat("<td>{0}</td>", extension);
+                sb.AppendFormat("<td>{0}</td>", sizeStr);
                 sb.Append("</tr>");
             }
 
             sb.Append("</table>");
-            sb.Append("</main>"); // ← Đóng thẻ main
+            sb.Append("</main>");
             sb.Append("</body></html>");
             return sb.ToString();
         }
+        #endregion
 
+        #region Trang hiển thị upload tập tin
         //Trang hiển thị upload tập tin
         private string GenerateUploadPageHtml()
         {
@@ -1729,7 +1938,10 @@ namespace ShareFile
             return sb.ToString();
         }
 
+        #endregion
 
+        #region Upload file to sever
+        //Phương thức xử lý việc tải file lên máy chủ.
         private async Task HandleFileUpload(HttpListenerContext context)
         {
             string clientIp = context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown";
@@ -1862,7 +2074,7 @@ namespace ShareFile
             }
         }
 
-
+        #endregion
         private async Task SendSuccessResponse(HttpListenerContext context, List<string> uploadedFiles, List<string> failedFiles)
         {
             // Kiểm tra lại file để đảm bảo không bị hỏng
