@@ -1181,7 +1181,7 @@ namespace ShareFile
                         bottom: 0;
                         width: 100%;
                         padding: 10px 0;
-                        font-size: 0.8rem;
+                        font-size: 0.7rem;
                         color: #778899;
                         font-style: italic;
                         text-align: center;
@@ -2096,7 +2096,7 @@ namespace ShareFile
                         background: #2c3e50;
                         padding: 10px 0;
                         text-align: center;
-                        font-size: 0.8em;
+                        font-size: 0.7em;
                         color: #778899;
                         font-style: italic;
                         z-index: 100;
