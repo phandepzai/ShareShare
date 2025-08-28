@@ -1792,7 +1792,7 @@ namespace ShareFile
                     </div>
                     <div class='button-group'>
                         <button id='typeBtn' class='active' title='Bấm vào đây để chuyển đổi giữa Mã QR và Mã Data Matrix'>Mã QR</button>
-                        <button id='resetBtn'>Reset</button>
+                        <button id='resetBtn'>RESET</button>
                     </div>
                     <div class='toggle-switch-group'>
                         <span class='toggle-label'>Thêm hậu tố #1 #2</span>
@@ -2140,7 +2140,7 @@ namespace ShareFile
                         </div>
                     </div>
                     <div class='button-group'>
-                        <button id='resetBtn'>Reset</button>
+                        <button id='resetBtn'>RESET</button>
                     </div>
         
                     <div class='code-display-container'>
