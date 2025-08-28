@@ -51,13 +51,14 @@
             this.label1 = new System.Windows.Forms.Label();
             this.lblFolderPath = new System.Windows.Forms.Label();
             this.txtLog = new System.Windows.Forms.TextBox();
-            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);           
+            
             this.SuspendLayout();
             // 
             // btnStart
             // 
             this.btnStart.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnStart.Location = new System.Drawing.Point(230, 5);
+            this.btnStart.Location = new System.Drawing.Point(234, 5);
             this.btnStart.Name = "btnStart";
             this.btnStart.Size = new System.Drawing.Size(95, 36);
             this.btnStart.TabIndex = 0;
@@ -68,7 +69,7 @@
             // btnStop
             // 
             this.btnStop.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnStop.Location = new System.Drawing.Point(333, 5);
+            this.btnStop.Location = new System.Drawing.Point(342, 5);
             this.btnStop.Name = "btnStop";
             this.btnStop.Size = new System.Drawing.Size(95, 36);
             this.btnStop.TabIndex = 1;
@@ -79,7 +80,7 @@
             // btnChooseFolder
             // 
             this.btnChooseFolder.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.btnChooseFolder.Location = new System.Drawing.Point(12, 36);
+            this.btnChooseFolder.Location = new System.Drawing.Point(10, 36);
             this.btnChooseFolder.Name = "btnChooseFolder";
             this.btnChooseFolder.Size = new System.Drawing.Size(100, 32);
             this.btnChooseFolder.TabIndex = 2;
@@ -89,7 +90,7 @@
             // 
             // txtPort
             // 
-            this.txtPort.Location = new System.Drawing.Point(131, 13);
+            this.txtPort.Location = new System.Drawing.Point(124, 13);
             this.txtPort.Name = "txtPort";
             this.txtPort.Size = new System.Drawing.Size(65, 20);
             this.txtPort.TabIndex = 3;
@@ -98,7 +99,7 @@
             // 
             this.label1.AutoSize = true;
             this.label1.Font = new System.Drawing.Font("Segoe UI", 9F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.label1.Location = new System.Drawing.Point(48, 16);
+            this.label1.Location = new System.Drawing.Point(44, 16);
             this.label1.Name = "label1";
             this.label1.Size = new System.Drawing.Size(64, 15);
             this.label1.TabIndex = 4;
@@ -117,17 +118,17 @@
             // txtLog
             // 
             this.txtLog.Font = new System.Drawing.Font("Tahoma", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
-            this.txtLog.Location = new System.Drawing.Point(12, 78);
+            this.txtLog.Location = new System.Drawing.Point(9, 76);
             this.txtLog.Multiline = true;
             this.txtLog.Name = "txtLog";
             this.txtLog.ReadOnly = true;
             this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.txtLog.Size = new System.Drawing.Size(440, 230);
+            this.txtLog.Size = new System.Drawing.Size(440, 295);
             this.txtLog.TabIndex = 6;
             // 
             // MainForm
             // 
-            this.ClientSize = new System.Drawing.Size(464, 312);
+            this.ClientSize = new System.Drawing.Size(456, 375);
             this.Controls.Add(this.txtLog);
             this.Controls.Add(this.lblFolderPath);
             this.Controls.Add(this.label1);

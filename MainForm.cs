@@ -3,19 +3,28 @@ using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Forms;
-using System.Drawing;
 using System.Web;
+using System.Windows.Forms;
+using System.Xml.Linq;
+using ZXing;
+using ZXing.Common;
+using ZXing.Datamatrix;
+using ZXing.QrCode;
+
+
 
 namespace ShareFile
 {
@@ -29,7 +38,7 @@ namespace ShareFile
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip;
         private System.Windows.Forms.ToolStripMenuItem openMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exitMenuItem;
-        private System.Windows.Forms.ToolTip toolTip1;
+        private System.Windows.Forms.ToolTip toolTip1;       
 
         // Thêm các hằng số và phương thức API để ngăn sleep
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
@@ -51,6 +60,10 @@ namespace ShareFile
         // Thêm các constant cho WebDAV
         private const string DAV_HEADER = "DAV: 1, 2";
         private const string MS_AUTHOR_VIA = "MS-Author-Via: DAV";
+
+        //Tạo mã QR code và Data Matrix
+        private const string QRCODE_ENDPOINT = "/code";
+        private const string GENERATE_IMAGE_ENDPOINT = "/generate-image";
 
         public Icon CreateVirtualFavicon()
         {
@@ -113,7 +126,9 @@ namespace ShareFile
             this.contextMenuStrip = new System.Windows.Forms.ContextMenuStrip(this.components);
             this.openMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exitMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.notifyIcon.DoubleClick += notifyIcon_DoubleClick;   // MouseDoubleClick cho notifyIcon
+            this.notifyIcon.DoubleClick += notifyIcon_DoubleClick;   // Nhấp đúp chuột vào biểu tượng thông báo để mở lại ứng dụng
+            this.txtLog.MouseDown += new System.Windows.Forms.MouseEventHandler(this.txtLog_MouseDown);
+            
 
             // TỰ ĐỘNG KÍCH HOẠT NGĂN SLEEP KHI KHỞI ĐỘNG ỨNG DỤNG
             PreventSleep(false);
@@ -184,6 +199,19 @@ namespace ShareFile
                     byte[] imageBytes = ms.ToArray();
                     return "data:image/png;base64," + Convert.ToBase64String(imageBytes);
                 }
+            }
+        }
+
+        private void txtLog_MouseDown(object sender, MouseEventArgs e)
+        {
+            // Đặt đường dẫn file log tương ứng với phương thức UpdateLog
+            string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
+            string logFilePath = Path.Combine(logDirectory, "log.txt");
+
+            // Mở file log nếu nó tồn tại
+            if (File.Exists(logFilePath))
+            {
+                System.Diagnostics.Process.Start(logFilePath);
             }
         }
 
@@ -337,7 +365,7 @@ namespace ShareFile
             _isExiting = true;
             AllowSleep();
             this.Dispose();
-            Application.Exit();
+            System.Windows.Forms.Application.Exit();
         }
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
@@ -436,7 +464,7 @@ namespace ShareFile
                 string computerName = GetComputerName();
 
                 UpdateLog("╔════════════════════════════════╗");
-                UpdateLog("║           ► ỨNG DỤNG ĐÃ KHỞI ĐỘNG                         ║");
+                UpdateLog("║                 ỨNG DỤNG ĐÃ KHỞI ĐỘNG                        ║");
                 UpdateLog("╚════════════════════════════════╝");
                 UpdateLog($"📍 Địa chỉ IP:          {localIP}");
                 UpdateLog($"📍 Port:                   {port}");
@@ -451,6 +479,10 @@ namespace ShareFile
                 UpdateLog($"       (Upload & chia sẻ file)");
                 UpdateLog($"   ➜ http://{localIP}:{port}/time");
                 UpdateLog("        (Xem đồng hồ & lịch)");
+                UpdateLog($"   ➜ http://{localIP}:{port}/qrcode");
+                UpdateLog("        (Tạo mã QR & Data Matrix)"); // Dòng mới
+                UpdateLog($"   ➜ http://{localIP}:{port}/kit");
+                UpdateLog("        (Tạo mã QR Code kitting)"); // Dòng mới
                 UpdateLog("✅ Có thể truy cập từ các thiết bị khác trong mạng LAN");
                 UpdateLog("══════════════════════════════════");
 
@@ -503,6 +535,7 @@ namespace ShareFile
             }
         }
 
+        #region PROCESS_REQUEST
         private async Task ProcessRequest(HttpListenerContext context)
         {
             string clientIp = context.Request.RemoteEndPoint.Address.ToString();
@@ -576,6 +609,55 @@ namespace ShareFile
                 await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
                 context.Response.OutputStream.Close();
                 UpdateLog($"[{clientIp}] Đã truy cập trang time.");
+                return;
+            }
+
+            // Trang tạo mã QR & Data Matrix
+            if (context.Request.HttpMethod == "GET" &&
+                (string.Equals(relativePath, QRCODE_ENDPOINT, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relativePath, "/qr", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relativePath, "/code", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relativePath, "/qrcode", StringComparison.OrdinalIgnoreCase))
+                 )
+            {
+                string htmlContent = GetQrCodePageHtml();
+                byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+                context.Response.ContentType = "text/html; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.LongLength;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+                UpdateLog($"[{clientIp}] Đã truy cập trang tạo mã QR/Data Matrix.");
+                return;
+            }
+            // Endpoint để tạo và trả về hình ảnh mã
+            if (context.Request.HttpMethod == "GET" &&
+                string.Equals(relativePath, GENERATE_IMAGE_ENDPOINT, StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleGenerateImageRequest(context);
+                return;
+            }
+
+            // Giao diện tạo 2 mã QR một lúc
+            if (context.Request.HttpMethod == "GET" && 
+                string.Equals(relativePath, "/kit", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(relativePath, "/kitting", StringComparison.OrdinalIgnoreCase)
+                )
+            {
+                string htmlContent = GetKitPageHtml();
+                byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+                context.Response.ContentType = "text/html; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.LongLength;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+                UpdateLog($"[{clientIp}] Đã truy cập trang tạo mã QR kitting.");
+                return;
+            }
+
+            // Endpoint để tạo và trả về hình ảnh mã
+            if (context.Request.HttpMethod == "GET" &&
+                string.Equals(relativePath, GENERATE_IMAGE_ENDPOINT, StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleGenerateImageRequest(context);
                 return;
             }
 
@@ -724,8 +806,118 @@ namespace ShareFile
                 UpdateLog($"[{clientIp}] Lỗi xử lý yêu cầu cho {relativePath}: {ex.Message}");
             }
         }
+        #endregion
 
-        #region Calendar & Clock
+        //Các định dạng file mở trực tiếp trên trình duyệt
+        private bool ShouldDisplayInBrowser(string extension)
+        {
+            var browserDisplayableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                // File văn bản
+                ".txt", ".html", ".htm", ".css", ".js", ".json", ".xml", ".md", ".ini",
+        
+                // File ảnh
+                ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico",
+        
+                // PDF
+                ".pdf",
+        
+                // Audio/Video
+                ".mp3", ".mp4", ".webm", ".ogg", ".wav"
+            };
+
+            return browserDisplayableExtensions.Contains(extension);
+        }
+        #region Endcode-Decode
+        // Encode tên file/thư mục để sinh link an toàn
+        private string SafeEncode(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+
+            // Encode toàn bộ URL nhưng giữ lại slash
+            string encoded = Uri.EscapeDataString(name);
+
+            // Thay thế các ký tự đặc biệt bằng placeholder an toàn
+            encoded = encoded
+                .Replace("%23", "~HASH~")    // #
+                .Replace("%25", "~PERCENT~") // %
+                .Replace("%26", "~AMP~")     // &
+                .Replace("%2A", "~STAR~")    // *
+                .Replace("%2B", "~PLUS~")    // + (uncomment để bảo vệ + gốc)
+                .Replace("%3D", "~EQUAL~")   // =
+                .Replace("%28", "(")
+                .Replace("%29", ")")
+                .Replace("%2F", "/")
+                .Replace("%5B", "[")
+                .Replace("%5D", "]")
+                .Replace("%21", "!")
+                .Replace("%40", "@")
+                .Replace("%2C", ",")
+                //.Replace("%20", "~")
+                //.Replace("%21", "!")
+                //.Replace("%40", "@")
+                //.Replace("%23", "~hash~");
+                //.Replace("%24", "$")
+                //.Replace("%25", "%")
+                //.Replace("%5E", "^")
+                //.Replace("%26", "&")
+                //.Replace("%28", "(")
+                //.Replace("%29", ")")
+                //.Replace("%60", "`")
+                //.Replace("%7E", "~")
+                //.Replace("%7B", "{")
+                //.Replace("%7D", "}")
+                //.Replace("%5B", "[")
+                //.Replace("%5D", "]");
+                ;
+            // Encode URL
+            return encoded;
+        }
+
+        // Decode lại khi nhận request
+        private string SafeDecode(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return name;
+
+            // Khôi phục các ký tự đặc biệt từ placeholder
+            string decoded = name
+                .Replace("~HASH~", "%23")
+                .Replace("~PERCENT~", "%25")
+                .Replace("~AMP~", "%26")
+                .Replace("~STAR~", "%2A")
+                .Replace("~PLUS~", "%2B")    // Uncomment để bảo vệ + gốc
+                .Replace("~EQUAL~", "%3D")
+                .Replace("/", "%2F")
+                .Replace("(", "%28")
+                .Replace(")", "%29")
+                .Replace("[", "%5B")
+                .Replace("]", "%5D")
+                .Replace("!", "%21")
+                .Replace("@", "%40")
+                .Replace(",", "%2C")
+                //.Replace("~", "%20")
+                //.Replace("!", "%21")
+                //.Replace("@", "%40")
+                //.Replace("#", "%23")
+                //.Replace("$", "%24")
+                //.Replace("%", "%25")
+                //.Replace("^", "%5E")
+                //.Replace("&", "%26")
+                //.Replace("(", "%28")
+                //.Replace(")", "%29")
+                //.Replace("`", "%60")
+                //.Replace("~", "%7E")
+                //.Replace("{", "%7B")
+                //.Replace("}", "%7D")
+                //.Replace("[", "%5B")
+                //.Replace("]", "%5D");
+                ;
+            // Decode URL
+            return Uri.UnescapeDataString(decoded);
+        }
+        #endregion
+
+        #region ĐỒNG HỒ VÀ LỊCH
         // Trang đồng hồ & lịch 
         private string GetTimePageHtml()
         {
@@ -990,7 +1182,7 @@ namespace ShareFile
                         width: 100%;
                         padding: 10px 0;
                         font-size: 0.8rem;
-                        color: #a9a9a9;
+                        color: #778899;
                         font-style: italic;
                         text-align: center;
                         linear-gradient(135deg, #1f3c54, #173d5c);
@@ -1258,114 +1450,780 @@ namespace ShareFile
             </html>";
         }
         #endregion
-
-        //Các định dạng file mở trực tiếp trên trình duyệt
-        private bool ShouldDisplayInBrowser(string extension)
+       
+        #region QR Code & Data Matrix
+        /// <summary>
+        /// Xử lý yêu cầu tạo hình ảnh mã QR/Data Matrix và trả về
+        /// </summary>
+        private async Task HandleGenerateImageRequest(HttpListenerContext context)
         {
-            var browserDisplayableExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            string clientIp = context.Request.RemoteEndPoint.Address.ToString();
+            var query = HttpUtility.ParseQueryString(context.Request.Url.Query);
+            string data = query["data"] ?? "";
+            string type = query["type"] ?? "qrcode";
+            string suffix = query["suffix"] ?? "off";
+
+            // Trả về một hình ảnh trống nếu dữ liệu rỗng
+            if (string.IsNullOrEmpty(data))
             {
-                // File văn bản
-                ".txt", ".html", ".htm", ".css", ".js", ".json", ".xml", ".md", ".ini",
-        
-                // File ảnh
-                ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp", ".svg", ".ico",
-        
-                // PDF
-                ".pdf",
-        
-                // Audio/Video
-                ".mp3", ".mp4", ".webm", ".ogg", ".wav"
-            };
+                context.Response.ContentType = "image/png";
+                using (var bmp = new Bitmap(1, 1))
+                {
+                    using (var ms = new MemoryStream())
+                    {
+                        bmp.Save(ms, ImageFormat.Png);
+                        byte[] emptyBuffer = ms.ToArray();
+                        context.Response.ContentLength64 = emptyBuffer.Length;
+                        await context.Response.OutputStream.WriteAsync(emptyBuffer, 0, emptyBuffer.Length);
+                    }
+                }
+                context.Response.Close();
+                return;
+            }
 
-            return browserDisplayableExtensions.Contains(extension);
+            if (type == "qrcode")
+            {
+                if (suffix == "1")
+                {
+                    data += "#1";
+                }
+                else if (suffix == "2")
+                {
+                    data += "#2";
+                }
+            }
+
+            try
+            {
+                var barcodeWriter = new BarcodeWriter
+                {
+                    Format = (type == "datamatrix") ? BarcodeFormat.DATA_MATRIX : BarcodeFormat.QR_CODE,
+                    Options = new EncodingOptions
+                    {
+                        Height = 300,
+                        Width = 300,
+                        Margin = 1
+                    }
+                };
+
+                var barcodeBitmap = barcodeWriter.Write(data);
+
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    barcodeBitmap.Save(ms, ImageFormat.Png);
+                    byte[] imageBytes = ms.ToArray();
+
+                    context.Response.ContentType = "image/png";
+                    context.Response.ContentLength64 = imageBytes.Length;
+                    await context.Response.OutputStream.WriteAsync(imageBytes, 0, imageBytes.Length);
+                    UpdateLog($"[{clientIp}] Đã tạo và gửi mã {type.ToUpper()} code.");
+                }
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = 500;
+                UpdateLog($"[{clientIp}] Lỗi khi tạo mã: {ex.Message}");
+            }
+            finally
+            {
+                context.Response.Close();
+            }
         }
-        #region Endcode-Decode
-        // Encode tên file/thư mục để sinh link an toàn
-        private string SafeEncode(string name)
+
+        /// <summary>
+        /// Trả về mã HTML của trang tạo mã QR/Data Matrix
+        /// </summary>
+        private string GetQrCodePageHtml()
         {
-            if (string.IsNullOrEmpty(name)) return name;
+            return @"
+            <!DOCTYPE html>
+            <html lang='vi'>
+            <head>
+                <meta charset='UTF-8'>
+                <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <title>TRÌNH TẠO MÃ CODE</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+                        background: #2c3e50;
+                        color: #ecf0f1;
+                        display: flex;
+                        justify-content: center;
+                        align-items: flex-start;
+                        min-height: 100vh;
+                        margin: 0;
+                        padding: 20px;
+                        box-sizing: border-box;
+                        padding-bottom: 50px;
+                    }
+                    .container {
+                        background: #34495e;
+                        padding: 30px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                        width: 100%;
+                        max-width: 600px;
+                        text-align: center;
+                        border: 1px solid #4a647e;
+                        margin-top: 30px;
+                    }
+                    h1 {
+                        color: #ecf0f1;
+                        font-weight: bold;
+                        margin-bottom: 25px;
+                        font-size: 1.8em;
+                    }
+                    .form-group {
+                        margin-bottom: 20px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    .data-input-wrapper {
+                        width: 100%;
+                        margin-bottom: 15px;
+                    }
+                    .data-input-wrapper label {
+                        display: block;
+                        text-align: center;
+                        margin-bottom: 5px;
+                        color: #bdc3c7;
+                        font-size: 0.9em;
+                    }
+                    .data-input-wrapper textarea {
+                        width: 95%;
+                        padding: 5px 12px;
+                        border-radius: 10px;
+                        border: 1px solid #546a81;
+                        background: #253341;
+                        color: #ecf0f1;
+                        font-size: 1.5em;
+                        box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+                        resize: vertical;
+                        min-height: 20px;
+                        font-weight: bold; //Font chữ đậm
+                    }
+                    .data-input-wrapper textarea:focus {
+                        outline: none;
+                        border-color: #3498db;
+                        box-shadow: 0 0 10px rgba(52, 152, 219, 0.4);
+                    }
+                    .button-group {
+                        display: flex;
+                        justify-content: center; /* Đã thay đổi */
+                        align-items: center;
+                        margin-bottom: 25px;
+                        flex-wrap: wrap;
+                        gap: 50px; /* Thêm dòng này để chỉnh khoảng cách */
+                    }
+                    .button-group button {
+                        background: #3498db;
+                        border: none;
+                        color: white;
+                        padding: 12px 20px;
+                        font-size: 1em;
+                        
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: background-color 0.3s, box-shadow 0.3s;
+                        flex-grow: 0; /*Thuộc tính flex-grow: 1; các nút tự động dãn ra để lấp đầy toàn bộ không gian còn trống, flex-grow: 0; Nếu muốn đặt chiều rộng cố định*/
+                        width: 150px; /* Đặt chiều rộng cố định mong muốn tại đây */
+                        font-weight: bold; //Font chữ đậm
+                    }
+                    .button-group button:hover {
+                        background: #2980b9;
+                    }
+                    .button-group button.active {
+                        background: #2ecc71;
+                        box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+                    }
+                    .button-group button#resetBtn {
+                        background: #e74c3c;
+                    }
+                    .button-group button#resetBtn:hover {
+                        background: #c0392b;
+                    }
+                    .toggle-switch-group {
+                        display: flex;
+                        justify-content: center; /* Đã thay đổi */
+                        align-items: center;
+                        width: 100%;
+                        margin-top: 10px;
+                        margin-bottom: 10px;
+            
+                    }
+                    .toggle-label {
+                        margin-right: 15px;
+                        font-size: 0.9em;
+                        color: #bdc3c7;
+                        white-space: nowrap;
+                        font-weight: bold;
+                    }
+                    .toggle-switch {
+                        position: relative;
+                        display: inline-block;
+                        width: 48px;
+                        height: 28px;
+                    }
+                    .toggle-switch input {
+                        display: none;
+                    }
+                    .toggle-slider {
+                        position: absolute;
+                        cursor: pointer;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
+                        background-color: #7f8c8d;
+                        transition: .4s;
+                        border-radius: 28px;
+                    }
+                    .toggle-slider:before {
+                        position: absolute;
+                        content: '';
+                        height: 20px;
+                        width: 20px;
+                        left: 4px;
+                        bottom: 4px;
+                        background-color: white;
+                        transition: .4s;
+                        border-radius: 50%;
+                    }
+                    input:checked + .toggle-slider {
+                        background-color: #2ecc71;
+                    }
+                    input:checked + .toggle-slider:before {
+                        transform: translateX(20px);
+                    }
+                    .code-display-container {
+                        display: flex;
+                        justify-content: space-around;
+                        flex-wrap: wrap;
+                        margin-top: 20px;
+                    }
+                    .code-item {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        margin: 10px;
+                    }
+                    .code-image {
+                        width: 200px;
+                        height: 200px;
+                        background: #253341;
+                        border: 1px solid #546a81;
+                        border-radius: 8px;
+                        padding: 5px;
+                        box-sizing: border-box;
+                        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+                        display: block;
+                    }
+                    .code-name {
+                        margin-top: 10px;
+                        font-size: 0.9em;
+                        color: #bdc3c7;
+                        word-wrap: break-word;
+                        width: 200px;
+                        text-align: center;
+                        min-height: 1.2em;
+                        font-weight: bold; //Font chữ đậm
+                    }
+                    .download-link {
+                        display: none;
+                        margin-top: 10px;
+                        padding: 8px 12px;
+                        background: #f39c12;
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        font-size: 0.9em;
+                        transition: background-color 0.3s;
+                    }
+                    .download-link:hover {
+                        background: #e67e22;
+                    }
+                    #qrCodeContainer, #dataMatrixContainer {
+                        display: flex;
+                        justify-content: space-around;
+                        flex-wrap: wrap;
+                        width: 100%;
+                    }
+                    .footer {
+                        position: fixed;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        background: #2c3e50;
+                        padding: 10px 0;
+                        text-align: center;
+                        font-size: 0.7em;
+                        color: #778899;
+                        font-style: italic;
+                        z-index: 100;
+                    }
+                    @media (max-width: 600px) {
+                        .container {
+                            padding: 15px;
+                            margin-top: 15px;
+                        }
+                        .button-group {
+                            flex-direction: column;
+                        }
+                        .button-group button {
+                            width: 100%;
+                            margin: 5px 0;
+                        }
+                        .data-input-wrapper textarea {
+                            width: 90%;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <h1>TRÌNH TẠO MÃ QRCODE & DATA MATRIX</h1>
+                    <div class='form-group'>
+                        <div class='data-input-wrapper'>
+                            <label for='dataInput'>Nhập dữ liệu để tạo mã:</label>
+                            <textarea id='dataInput' placeholder='Nhập dữ liệu để tạo mã...' rows='4'></textarea>
+                        </div>
+                    </div>
+                    <div class='button-group'>
+                        <button id='typeBtn' class='active' title='Bấm vào đây để chuyển đổi giữa Mã QR và Mã Data Matrix'>Mã QR</button>
+                        <button id='resetBtn'>Reset</button>
+                    </div>
+                    <div class='toggle-switch-group'>
+                        <span class='toggle-label'>Thêm hậu tố #1 #2</span>
+                        <label class='toggle-switch'>
+                            <input type='checkbox' id='suffixToggle'>
+                            <span class='toggle-slider'></span>
+                        </label>
+                    </div>
+        
+                    <div id='codeDisplayContainer' class='code-display-container'>
+                        <div id='qrCodeContainer'>
+                            <div class='code-item'>
+                                <img id='qrCodeImage1' class='code-image' src=''>
+                                <div id='qrCodeName1' class='code-name'></div>
+                                <a id='downloadQr1' class='download-link' href=''>Tải về</a>
+                            </div>
+                            <div class='code-item'>
+                                <img id='qrCodeImage2' class='code-image' src=''>
+                                <div id='qrCodeName2' class='code-name'></div>
+                                <a id='downloadQr2' class='download-link' href=''>Tải về</a>
+                            </div>
+                        </div>
+                        <div id='dataMatrixContainer' style='display: none;'>
+                            <div class='code-item'>
+                                <img id='dataMatrixImage' class='code-image' src=''>
+                                <div id='dataMatrixName' class='code-name'></div>
+                                <a id='downloadDm' class='download-link' href=''>Tải về</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class='footer'>Thiết kế bởi Nông Văn Phấn®</div>
+                <script>
+                    function getBaseUrl() {
+                        var url = window.location.protocol + '//' + window.location.host;
+                        return url;
+                    }
 
-            // Encode toàn bộ URL nhưng giữ lại slash
-            string encoded = Uri.EscapeDataString(name);
+                    function getSafeFilename(text) {
+                        // Thay thế các ký tự không hợp lệ cho tên file bằng dấu gạch dưới
+                        // Giữ lại khoảng trắng và #
+                        var invalidChars = /[\/\\?%*:|""<>]/g;
+                        var safeText = text.replace(invalidChars, '_');
+                        return safeText.substring(0, 50).trim(); // Giới hạn độ dài và loại bỏ khoảng trắng thừa
+                    }
 
-            // Thay thế các ký tự đặc biệt bằng placeholder an toàn
-            encoded = encoded
-                .Replace("%23", "~HASH~")    // #
-                .Replace("%25", "~PERCENT~") // %
-                .Replace("%26", "~AMP~")     // &
-                .Replace("%2A", "~STAR~")    // *
-                .Replace("%2B", "~PLUS~")    // + (uncomment để bảo vệ + gốc)
-                .Replace("%3D", "~EQUAL~")   // =
-                .Replace("%28", "(")
-                .Replace("%29", ")")
-                .Replace("%2F", "/")
-                .Replace("%5B", "[")
-                .Replace("%5D", "]")
-                .Replace("%21", "!")
-                .Replace("%40", "@")
-                .Replace("%2C", ",")
-                //.Replace("%20", "~")
-                //.Replace("%21", "!")
-                //.Replace("%40", "@")
-                //.Replace("%23", "~hash~");
-                //.Replace("%24", "$")
-                //.Replace("%25", "%")
-                //.Replace("%5E", "^")
-                //.Replace("%26", "&")
-                //.Replace("%28", "(")
-                //.Replace("%29", ")")
-                //.Replace("%60", "`")
-                //.Replace("%7E", "~")
-                //.Replace("%7B", "{")
-                //.Replace("%7D", "}")
-                //.Replace("%5B", "[")
-                //.Replace("%5D", "]");
-                ;
-            // Encode URL
-            return encoded;
+                    function updateCode() {
+                        var data = document.getElementById('dataInput').value.trim();
+                        var isQrCode = document.getElementById('typeBtn').textContent === 'Mã QR';
+                        var addSuffix = document.getElementById('suffixToggle').checked;
+                        var baseUrl = getBaseUrl();
+                        var qrCodeContainer = document.getElementById('qrCodeContainer');
+                        var dataMatrixContainer = document.getElementById('dataMatrixContainer');
+
+                        var downloadQr1Link = document.getElementById('downloadQr1');
+                        var downloadQr2Link = document.getElementById('downloadQr2');
+                        var downloadDmLink = document.getElementById('downloadDm');
+
+                        if (data === '') {
+                            downloadQr1Link.style.display = 'none';
+                            downloadQr2Link.style.display = 'none';
+                            downloadDmLink.style.display = 'none';
+                            document.getElementById('qrCodeImage1').src = baseUrl + '/generate-image?data=&type=qrcode';
+                            document.getElementById('qrCodeImage2').src = baseUrl + '/generate-image?data=&type=qrcode';
+                            document.getElementById('dataMatrixImage').src = baseUrl + '/generate-image?data=&type=datamatrix';
+                            document.getElementById('qrCodeName1').textContent = '';
+                            document.getElementById('qrCodeName2').textContent = '';
+                            document.getElementById('dataMatrixName').textContent = '';
+                            return;
+                        }
+
+                        if (isQrCode) {
+                            qrCodeContainer.style.display = 'flex';
+                            dataMatrixContainer.style.display = 'none';
+
+                            var data1 = data;
+                            var data2 = data;
+                
+                            if (addSuffix) {
+                                data1 += '#1';
+                                data2 += '#2';
+                            }
+
+                            var url1 = baseUrl + '/generate-image?data=' + encodeURIComponent(data) + '&type=qrcode&suffix=' + (addSuffix ? '1' : 'off');
+                            document.getElementById('qrCodeImage1').src = url1;
+                            document.getElementById('qrCodeName1').textContent = data1;
+                            downloadQr1Link.style.display = 'block';
+                            downloadQr1Link.href = url1;
+                            downloadQr1Link.setAttribute('download', getSafeFilename(data1) + '.png');
+
+                            var url2 = baseUrl + '/generate-image?data=' + encodeURIComponent(data) + '&type=qrcode&suffix=' + (addSuffix ? '2' : 'off');
+                            document.getElementById('qrCodeImage2').src = url2;
+                            document.getElementById('qrCodeName2').textContent = data2;
+                            downloadQr2Link.style.display = 'block';
+                            downloadQr2Link.href = url2;
+                            downloadQr2Link.setAttribute('download', getSafeFilename(data2) + '.png');
+
+                        } else {
+                            qrCodeContainer.style.display = 'none';
+                            dataMatrixContainer.style.display = 'flex';
+                
+                            var url = baseUrl + '/generate-image?data=' + encodeURIComponent(data) + '&type=datamatrix&suffix=off';
+                            document.getElementById('dataMatrixImage').src = url;
+                            document.getElementById('dataMatrixName').textContent = data;
+                            downloadDmLink.style.display = 'block';
+                            downloadDmLink.href = url;
+                            downloadDmLink.setAttribute('download', getSafeFilename(data) + '.png');
+                        }
+                    }
+
+                    document.getElementById('dataInput').addEventListener('input', updateCode);
+                    document.getElementById('typeBtn').addEventListener('click', function() {
+                        var typeBtn = document.getElementById('typeBtn');
+                        var currentType = typeBtn.textContent;
+                        if (currentType === 'Mã QR') {
+                            typeBtn.textContent = 'Mã Data Matrix';
+                            typeBtn.classList.remove('active');
+                        } else {
+                            typeBtn.textContent = 'Mã QR';
+                            typeBtn.classList.add('active');
+                        }
+                        document.getElementById('suffixToggle').closest('.toggle-switch-group').style.display = (typeBtn.textContent === 'Mã QR') ? 'flex' : 'none';
+                        updateCode();
+                    });
+                    document.getElementById('resetBtn').addEventListener('click', function() {
+                        document.getElementById('dataInput').value = '';
+                        updateCode();
+                    });
+                    document.getElementById('suffixToggle').addEventListener('change', updateCode);
+        
+                    document.addEventListener('DOMContentLoaded', function() {
+                        document.getElementById('suffixToggle').closest('.toggle-switch-group').style.display = (document.getElementById('typeBtn').textContent === 'Mã QR') ? 'flex' : 'none';
+                        updateCode();
+                    });
+                </script>
+            </body>
+            </html>";
         }
+        #endregion
 
-        // Decode lại khi nhận request
-        private string SafeDecode(string name)
+        #region TRÌNH TẠO MÃ QRCODE KITING
+        /// <summary>
+        /// Trả về mã HTML của trang tạo mã QR theo bộ
+        /// </summary>
+        private string GetKitPageHtml()
         {
-            if (string.IsNullOrEmpty(name)) return name;
+            return @"
+            <!DOCTYPE html>
+            <html lang='vi'>
+            <head>
+                <meta charset='UTF-8'>
+                <meta http-equiv='X-UA-Compatible' content='IE=edge'>
+                <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+                <title>TRÌNH TẠO MÃ QRCODE</title>
+                <style>
+                    body {
+                        font-family: 'Segoe UI', 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+                        background: #2c3e50;
+                        color: #ecf0f1;
+                        display: flex;
+                        justify-content: center;
+                        align-items: flex-start;
+                        min-height: 100vh;
+                        margin: 0;
+                        padding: 20px;
+                        box-sizing: border-box;
+                        padding-bottom: 50px;
+                    }
+                    .container {
+                        background: #34495e;
+                        padding: 30px;
+                        border-radius: 15px;
+                        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+                        width: 100%;
+                        max-width: 800px;
+                        text-align: center;
+                        border: 1px solid #4a647e;
+                        margin-top: 30px;
+                    }
+                    h1 {
+                        color: #ecf0f1;
+                        font-weight: bold;
+                        margin-bottom: 25px;
+                        font-size: 1.8em;
+                    }
+                    .form-group {
+                        margin-bottom: 20px;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }
+                    .input-pair {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 20px;
+                        width: 100%;
+                        justify-content: center;
+                    }
+                    .data-input-wrapper {
+                        flex: 1;
+                        min-width: 250px;
+                        margin-bottom: 15px;
+                    }
+                    .data-input-wrapper label {
+                        display: block;
+                        text-align: center;
+                        margin-bottom: 5px;
+                        color: #bdc3c7;
+                        font-size: 0.9em;
+                        font-style: italic;
+                    }
+                    .data-input-wrapper textarea {
+                        width: 100%;
+                        padding: 5px 12px;
+                        border-radius: 8px;
+                        border: 1px solid #546a81;
+                        background: #253341;
+                        color: #ecf0f1;
+                        font-size: 1.3em;
+                        box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+                        resize: vertical;
+                        min-height: 20px;
+                        font-weight: bold;
+                        box-sizing: border-box; /* Quan trọng để padding không làm hỏng width */
+                    }
+                    .button-group {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        margin-bottom: 25px;
+                        flex-wrap: wrap;
+                        gap: 10px;
+                    }
+                    .button-group button {
+                        background: #e74c3c;
+                        border: none;
+                        color: white;
+                        padding: 12px 20px;
+                        font-size: 1em;
+                        font-weight: bold;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: background-color 0.3s, box-shadow 0.3s;
+                        width: 100px;
+                    }
+                    .button-group button:hover {
+                        background: #c0392b;
+                    }
+                    .code-display-container {
+                        display: flex;
+                        justify-content: space-around;
+                        flex-wrap: wrap;
+                        margin-top: 20px;
+                    }
+                    .code-item {
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        margin: 10px;
+                    }
+                    .code-image {
+                        width: 200px;
+                        height: 200px;
+                        background: #253341;
+                        border: 1px solid #546a81;
+                        border-radius: 8px;
+                        padding: 5px;
+                        box-sizing: border-box;
+                        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+                        display: block;
+                    }
+                    .code-name {
+                        margin-top: 10px;
+                        font-size: 0.9em;
+                        color: #bdc3c7;
+                        word-wrap: break-word;
+                        width: 200px;
+                        text-align: center;
+                        min-height: 1.2em;
+                        font-weight: bold;
+                    }
+                    .download-link {
+                        display: none;
+                        margin-top: 10px;
+                        padding: 8px 12px;
+                        background: #f39c12;
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 5px;
+                        font-size: 0.9em;
+                        transition: background-color 0.3s;
+                    }
+                    .download-link:hover {
+                        background: #e67e22;
+                    }
+                    .footer {
+                        position: fixed;
+                        bottom: 0;
+                        left: 0;
+                        right: 0;
+                        background: #2c3e50;
+                        padding: 10px 0;
+                        text-align: center;
+                        font-size: 0.8em;
+                        color: #778899;
+                        font-style: italic;
+                        z-index: 100;
+                    }
+                    @media (max-width: 600px) {
+                        .container {
+                            padding: 15px;
+                            margin-top: 15px;
+                        }
+                        .button-group {
+                            flex-direction: column;
+                        }
+                        .button-group button {
+                            width: 100%;
+                            margin: 5px 0;
+                        }
+                        .input-pair {
+                            flex-direction: column;
+                            gap: 0;
+                        }
+                        .data-input-wrapper {
+                            min-width: unset;
+                            width: 100%;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <h1>TRÌNH TẠO MÃ QRCODE</h1>
+                    <div class='form-group'>
+                        <div class='input-pair'>
+                            <div class='data-input-wrapper'>
+                                <label for='dataInput1'>Dữ liệu mã QR #1:</label>
+                                <textarea id='dataInput1' placeholder='Nhập dữ liệu cho mã QR thứ nhất...' rows='2'></textarea>
+                            </div>
+                            <div class='data-input-wrapper'>
+                                <label for='dataInput2'>Dữ liệu mã QR #2:</label>
+                                <textarea id='dataInput2' placeholder='Nhập dữ liệu cho mã QR thứ hai...' rows='2'></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class='button-group'>
+                        <button id='resetBtn'>Reset</button>
+                    </div>
+        
+                    <div class='code-display-container'>
+                        <div class='code-item'>
+                            <img id='qrCodeImage1' class='code-image' src=''>
+                            <div id='qrCodeName1' class='code-name'></div>
+                            <a id='downloadQr1' class='download-link' href=''>Tải về</a>
+                        </div>
+                        <div class='code-item'>
+                            <img id='qrCodeImage2' class='code-image' src=''>
+                            <div id='qrCodeName2' class='code-name'></div>
+                            <a id='downloadQr2' class='download-link' href=''>Tải về</a>
+                        </div>
+                    </div>
+                </div>
+                <div class='footer'>Thiết kế bởi Nông Văn Phấn®</div>
+                <script>
+                    function getBaseUrl() {
+                        var url = window.location.protocol + '//' + window.location.host;
+                        return url;
+                    }
 
-            // Khôi phục các ký tự đặc biệt từ placeholder
-            string decoded = name
-                .Replace("~HASH~", "%23")
-                .Replace("~PERCENT~", "%25")
-                .Replace("~AMP~", "%26")
-                .Replace("~STAR~", "%2A")
-                .Replace("~PLUS~", "%2B")    // Uncomment để bảo vệ + gốc
-                .Replace("~EQUAL~", "%3D")
-                .Replace("/", "%2F")
-                .Replace("(", "%28")
-                .Replace(")", "%29")
-                .Replace("[", "%5B")
-                .Replace("]", "%5D")
-                .Replace("!", "%21")
-                .Replace("@", "%40")
-                .Replace(",", "%2C")
-                //.Replace("~", "%20")
-                //.Replace("!", "%21")
-                //.Replace("@", "%40")
-                //.Replace("#", "%23")
-                //.Replace("$", "%24")
-                //.Replace("%", "%25")
-                //.Replace("^", "%5E")
-                //.Replace("&", "%26")
-                //.Replace("(", "%28")
-                //.Replace(")", "%29")
-                //.Replace("`", "%60")
-                //.Replace("~", "%7E")
-                //.Replace("{", "%7B")
-                //.Replace("}", "%7D")
-                //.Replace("[", "%5B")
-                //.Replace("]", "%5D");
-                ;
-            // Decode URL
-            return Uri.UnescapeDataString(decoded);
-        }
+                    function getSafeFilename(text) {
+                        var invalidChars = /[\\/?%*:|\""<>]/g;
+                        var safeText = text.replace(invalidChars, '_');
+                        return safeText.substring(0, 50).trim();
+                    }
+
+                    function updateCode() {
+                        var data1 = document.getElementById('dataInput1').value.trim();
+                        var data2 = document.getElementById('dataInput2').value.trim();
+                        var baseUrl = getBaseUrl();
+            
+                        // Xử lý mã QR 1
+                        var img1 = document.getElementById('qrCodeImage1');
+                        var name1 = document.getElementById('qrCodeName1');
+                        var link1 = document.getElementById('downloadQr1');
+                        if (data1 !== '') {
+                            var url1 = baseUrl + '/generate-image?data=' + encodeURIComponent(data1) + '&type=qrcode';
+                            img1.src = url1;
+                            name1.textContent = data1;
+                            link1.href = url1;
+                            link1.setAttribute('download', getSafeFilename(data1) + '.png');
+                            link1.style.display = 'block';
+                        } else {
+                            img1.src = '';
+                            name1.textContent = '';
+                            link1.style.display = 'none';
+                        }
+            
+                        // Xử lý mã QR 2
+                        var img2 = document.getElementById('qrCodeImage2');
+                        var name2 = document.getElementById('qrCodeName2');
+                        var link2 = document.getElementById('downloadQr2');
+                        if (data2 !== '') {
+                            var url2 = baseUrl + '/generate-image?data=' + encodeURIComponent(data2) + '&type=qrcode';
+                            img2.src = url2;
+                            name2.textContent = data2;
+                            link2.href = url2;
+                            link2.setAttribute('download', getSafeFilename(data2) + '.png');
+                            link2.style.display = 'block';
+                        } else {
+                            img2.src = '';
+                            name2.textContent = '';
+                            link2.style.display = 'none';
+                        }
+                    }
+
+                    function resetInputs() {
+                        document.getElementById('dataInput1').value = '';
+                        document.getElementById('dataInput2').value = '';
+                        updateCode();
+                    }
+
+                    document.getElementById('dataInput1').addEventListener('input', updateCode);
+                    document.getElementById('dataInput2').addEventListener('input', updateCode);
+                    document.getElementById('resetBtn').addEventListener('click', resetInputs);
+
+                    document.addEventListener('DOMContentLoaded', updateCode);
+                </script>
+            </body>
+            </html>";
+                    }
         #endregion
 
         #region Xử lý upload file
@@ -1747,10 +2605,46 @@ namespace ShareFile
 
         private void UpdateLog(string message, bool isError = false)
         {
-            string prefix = isError ? "❖ [!] " : "• "; // Giữ nguyên phần prefix nếu cần highlight lỗi
-            string timePart = $"[{DateTime.Now:dd/MM/yyyy HH:mm:ss}]"; // Định dạng thời gian trong []
-            string formattedMessage = $"{prefix}{timePart}\n {message}"; // Kết hợp thành chuỗi hoàn chỉnh
+            string prefix = isError ? "❖ [!] " : "• ";
+            string timePart = $"[{DateTime.Now:dd/MM/yyyy HH:mm:ss}]";
+            string formattedMessage = $"{prefix}{timePart} {message}";
+            //\r\n là xuống dòng trong Windows
 
+            // Tạo thư mục "Logs" nếu chưa tồn tại
+            string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
+            if (!Directory.Exists(logDirectory))
+            {
+                Directory.CreateDirectory(logDirectory);
+            }
+
+            // Đặt đường dẫn file log trong thư mục Logs
+            string logFilePath = Path.Combine(logDirectory, "log.txt");
+
+            // Ghi log vào file
+            try
+            {
+                File.AppendAllText(logFilePath, formattedMessage + Environment.NewLine);
+            }
+            catch (Exception ex)
+            {
+                // Ghi lại lỗi nếu không thể ghi file
+                string errorLogMessage = $"Lỗi ghi log vào file: {ex.Message}";
+                if (this.InvokeRequired)
+                {
+                    this.Invoke(new Action(() =>
+                    {
+                        txtLog.AppendText($"❖ [!] {timePart} {errorLogMessage}\r\n");
+                    }));
+                }
+                else
+                {
+                    txtLog.AppendText($"❖ [!] {timePart} {errorLogMessage}\r\n");
+                }
+                // Kết thúc phương thức tại đây để tránh ghi đúp log
+                return;
+            }
+
+            // Hiển thị log lên TextBox trên giao diện
             if (this.InvokeRequired)
             {
                 this.Invoke(new Action(() =>
