@@ -161,9 +161,17 @@ namespace ShareFile
             this.notifyIcon.Text = "Chia Sẻ File qua LAN";
             this.notifyIcon.Visible = false;
 
+            // Đặt cửa sổ ứng dụng ở góc phải bên dưới màn hình
+            this.StartPosition = FormStartPosition.Manual;
+            this.Location = new Point(
+                Screen.PrimaryScreen.WorkingArea.Right - this.Width,
+                Screen.PrimaryScreen.WorkingArea.Bottom - this.Height
+            );
+
             this.Resize += new System.EventHandler(this.MainForm_Resize);
             this.FormClosing += MainForm_FormClosing;
             this.txtPort.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.txtPort_KeyPress);
+            CleanupLogs(); // Gọi phương thức dọn dẹp log khi ứng dụng khởi động
         }
 
         private string GetIconBase64(string path, bool isDirectory)
@@ -200,20 +208,7 @@ namespace ShareFile
                     return "data:image/png;base64," + Convert.ToBase64String(imageBytes);
                 }
             }
-        }
-
-        private void txtLog_MouseDown(object sender, MouseEventArgs e)
-        {
-            // Đặt đường dẫn file log tương ứng với phương thức UpdateLog
-            string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
-            string logFilePath = Path.Combine(logDirectory, "log.txt");
-
-            // Mở file log nếu nó tồn tại
-            if (File.Exists(logFilePath))
-            {
-                System.Diagnostics.Process.Start(logFilePath);
-            }
-        }
+        }        
 
         private void MainForm_Load(object sender, EventArgs e)
         {
@@ -1908,7 +1903,7 @@ namespace ShareFile
                         var typeBtn = document.getElementById('typeBtn');
                         var currentType = typeBtn.textContent;
                         if (currentType === 'Mã QR') {
-                            typeBtn.textContent = 'Mã Data Matrix';
+                            typeBtn.textContent = 'Data Matrix';
                             typeBtn.classList.remove('active');
                         } else {
                             typeBtn.textContent = 'Mã QR';
@@ -2602,23 +2597,25 @@ namespace ShareFile
             }
             return localIP;
         }
+        #region Phương thức UpdateLog &  CleanupLogs
+        //Phương thức này sẽ tạo một file log mới mỗi ngày, với tên có định dạng log_yyyy-MM-dd.txt
 
         private void UpdateLog(string message, bool isError = false)
         {
             string prefix = isError ? "❖ [!] " : "• ";
             string timePart = $"[{DateTime.Now:dd/MM/yyyy HH:mm:ss}]";
             string formattedMessage = $"{prefix}{timePart} {message}";
-            //\r\n là xuống dòng trong Windows
 
-            // Tạo thư mục "Logs" nếu chưa tồn tại
+            // Tạo thư mục "Log" nếu chưa tồn tại
             string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
             if (!Directory.Exists(logDirectory))
             {
                 Directory.CreateDirectory(logDirectory);
             }
 
-            // Đặt đường dẫn file log trong thư mục Logs
-            string logFilePath = Path.Combine(logDirectory, "log.txt");
+            // Đặt tên file log theo ngày hiện tại
+            string logFileName = $"log_{DateTime.Now:yyyyMMdd}.txt";
+            string logFilePath = Path.Combine(logDirectory, logFileName);
 
             // Ghi log vào file
             try
@@ -2640,7 +2637,6 @@ namespace ShareFile
                 {
                     txtLog.AppendText($"❖ [!] {timePart} {errorLogMessage}\r\n");
                 }
-                // Kết thúc phương thức tại đây để tránh ghi đúp log
                 return;
             }
 
@@ -2657,6 +2653,50 @@ namespace ShareFile
                 txtLog.AppendText(formattedMessage + "\r\n");
             }
         }
+        //Thêm phương thức CleanupLogs
+        //Phương thức này sẽ tự động xóa các file log cũ hơn 10 ngày để giải phóng dung lượng.
+        private void CleanupLogs()
+        {
+            string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
+            if (!Directory.Exists(logDirectory))
+            {
+                return;
+            }
+
+            DateTime tenDaysAgo = DateTime.Now.AddDays(-10);
+
+            foreach (string file in Directory.GetFiles(logDirectory, "log_*.txt"))
+            {
+                try
+                {
+                    FileInfo fileInfo = new FileInfo(file);
+                    if (fileInfo.LastWriteTime < tenDaysAgo)
+                    {
+                        File.Delete(file);
+                        UpdateLog($"Đã xóa file log cũ: {Path.GetFileName(file)}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    UpdateLog($"Lỗi khi xóa file log {Path.GetFileName(file)}: {ex.Message}", true);
+                }
+            }
+        }
+
+        private void txtLog_MouseDown(object sender, MouseEventArgs e)
+        {
+            // Đặt đường dẫn file log tương ứng với phương thức UpdateLog
+            string logDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Log");
+            string logFileName = $"log_{DateTime.Now:yyyyMMdd}.txt";
+            string logFilePath = Path.Combine(logDirectory, logFileName);
+
+            // Mở file log nếu nó tồn tại
+            if (File.Exists(logFilePath))
+            {
+                System.Diagnostics.Process.Start(logFilePath);
+            }
+        }
+        #endregion
 
         // Thêm phương thức xử lý WebDAV
         private async Task HandleWebDAVRequest(HttpListenerContext context)
@@ -2756,6 +2796,7 @@ namespace ShareFile
                 UpdateLog($"[{clientIp}] WebDAV error: {ex.Message}");
             }
         }
+
         #region Phương thức GetFileIcon
         private string GetFileIcon(string fileExtension)
         {

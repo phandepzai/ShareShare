@@ -51,8 +51,7 @@
             this.label1 = new System.Windows.Forms.Label();
             this.lblFolderPath = new System.Windows.Forms.Label();
             this.txtLog = new System.Windows.Forms.TextBox();
-            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);           
-            
+            this.toolTip1 = new System.Windows.Forms.ToolTip(this.components);
             this.SuspendLayout();
             // 
             // btnStart
@@ -123,12 +122,12 @@
             this.txtLog.Name = "txtLog";
             this.txtLog.ReadOnly = true;
             this.txtLog.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-            this.txtLog.Size = new System.Drawing.Size(440, 295);
+            this.txtLog.Size = new System.Drawing.Size(440, 322);
             this.txtLog.TabIndex = 6;
             // 
             // MainForm
             // 
-            this.ClientSize = new System.Drawing.Size(456, 375);
+            this.ClientSize = new System.Drawing.Size(456, 401);
             this.Controls.Add(this.txtLog);
             this.Controls.Add(this.lblFolderPath);
             this.Controls.Add(this.label1);
