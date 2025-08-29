@@ -2214,6 +2214,25 @@ namespace ShareFile
                     document.getElementById('dataInput2').addEventListener('input', updateCode);
                     document.getElementById('resetBtn').addEventListener('click', resetInputs);
 
+                    // Xử lý sự kiện nhấn Enter để chuyển focus và Shift + Enter để xuống dòng
+                    document.getElementById('dataInput1').addEventListener('keydown', function(event) {
+                        if (event.key === 'Enter') {
+                            if (!event.shiftKey) { // Nếu chỉ nhấn Enter
+                                event.preventDefault(); // Ngăn xuống dòng
+                                document.getElementById('dataInput2').focus(); // Chuyển focus sang ô thứ hai
+                            }
+                        }
+                    });
+
+                    document.getElementById('dataInput2').addEventListener('keydown', function(event) {
+                        if (event.key === 'Enter') {
+                            if (!event.shiftKey) { // Nếu chỉ nhấn Enter
+                                event.preventDefault(); // Ngăn xuống dòng
+                                document.getElementById('dataInput1').focus(); // Chuyển focus về ô thứ nhất
+                            }
+                        }
+                    });
+
                     document.addEventListener('DOMContentLoaded', updateCode);
                 </script>
             </body>
