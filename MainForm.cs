@@ -13,16 +13,19 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
+using System.Web.UI.WebControls;
 using System.Windows.Forms;
 using System.Xml.Linq;
 using ZXing;
 using ZXing.Common;
 using ZXing.Datamatrix;
 using ZXing.QrCode;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TrayNotify;
 
 
 
@@ -38,7 +41,8 @@ namespace ShareFile
         private System.Windows.Forms.ContextMenuStrip contextMenuStrip;
         private System.Windows.Forms.ToolStripMenuItem openMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exitMenuItem;
-        private System.Windows.Forms.ToolTip toolTip1;       
+        private System.Windows.Forms.ToolTip toolTip1;
+        private string _localIP; // Thêm dòng này vào danh sách biến của class
 
         // Thêm các hằng số và phương thức API để ngăn sleep
         [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
@@ -128,7 +132,6 @@ namespace ShareFile
             this.exitMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.notifyIcon.DoubleClick += notifyIcon_DoubleClick;   // Nhấp đúp chuột vào biểu tượng thông báo để mở lại ứng dụng
             this.txtLog.MouseDown += new System.Windows.Forms.MouseEventHandler(this.txtLog_MouseDown);
-            
 
             // TỰ ĐỘNG KÍCH HOẠT NGĂN SLEEP KHI KHỞI ĐỘNG ỨNG DỤNG
             PreventSleep(false);
@@ -167,7 +170,6 @@ namespace ShareFile
                 Screen.PrimaryScreen.WorkingArea.Right - this.Width,
                 Screen.PrimaryScreen.WorkingArea.Bottom - this.Height
             );
-
             this.Resize += new System.EventHandler(this.MainForm_Resize);
             this.FormClosing += MainForm_FormClosing;
             this.txtPort.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.txtPort_KeyPress);
@@ -457,12 +459,13 @@ namespace ShareFile
 
                 string localIP = GetLocalIPAddress();
                 string computerName = GetComputerName();
+                _localIP = localIP; // Gán IP vào biến cấp lớp
 
                 UpdateLog("╔════════════════════════════════╗");
                 UpdateLog("║                 ỨNG DỤNG ĐÃ KHỞI ĐỘNG                        ║");
                 UpdateLog("╚════════════════════════════════╝");
-                UpdateLog($"📍 Địa chỉ IP:          {localIP}");
-                UpdateLog($"📍 Port:                   {port}");
+                UpdateLog($"📍 Địa chỉ IP:       {localIP}");
+                UpdateLog($"📍 Port:             {port}");
                 UpdateLog($"📍 Tên máy tính:     {computerName}");
                 UpdateLog("══════════════════════════════════");
                 UpdateLog("🌐 Truy cập từ trình duyệt:");
@@ -478,6 +481,10 @@ namespace ShareFile
                 UpdateLog("        (Tạo mã QR & Data Matrix)"); // Dòng mới
                 UpdateLog($"   ➜ http://{localIP}:{port}/kit");
                 UpdateLog("        (Tạo mã QR Code kitting)"); // Dòng mới
+                UpdateLog($"   ➜ http://{localIP}:{port}/confirm");
+                UpdateLog("        (Trang nhập tọa độ)"); // Dòng mới
+                UpdateLog($"   ➜ http://{localIP}:{port}/txt");
+                UpdateLog("        (Để tạo file *.txt)"); // Dòng mới
                 UpdateLog("✅ Có thể truy cập từ các thiết bị khác trong mạng LAN");
                 UpdateLog("══════════════════════════════════");
 
@@ -590,6 +597,14 @@ namespace ShareFile
                 UpdateLog($"[{clientIp}] Đã truy cập trang upload file.");
                 return;
             }
+
+            if (context.Request.HttpMethod == "POST" &&
+                string.Equals(relativePath, "/upload", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleFileUpload(context);
+                return;
+            }
+
             // Trang đồng hồ & lịch
             if (context.Request.HttpMethod == "GET" &&
                 string.Equals(relativePath, "/time", StringComparison.OrdinalIgnoreCase)||
@@ -656,10 +671,52 @@ namespace ShareFile
                 return;
             }
 
-            if (context.Request.HttpMethod == "POST" &&
-                string.Equals(relativePath, "/upload", StringComparison.OrdinalIgnoreCase))
+            // Trang nhập tọa độ và sAPN
+            // Trang nhập tọa độ và sAPN
+            if (context.Request.HttpMethod == "GET" &&
+                (string.Equals(relativePath, "/confirm", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relativePath, "/cf", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relativePath, "/toado", StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(relativePath, "/dotoado", StringComparison.OrdinalIgnoreCase)))
             {
-                await HandleFileUpload(context);
+                string htmlContent = GenerateConfirmPageHtml();
+                byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+                context.Response.ContentType = "text/html; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.LongLength;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+                UpdateLog($"[{clientIp}] Đã truy cập trang nhập tọa độ.");
+                return;
+            }
+
+            // Xử lý dữ liệu POST từ trang /confirm
+            if (context.Request.HttpMethod == "POST" &&
+                string.Equals(relativePath, "/confirm", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleConfirmData(context);
+                return;
+            }
+
+            // Thêm endpoint mới /txt
+            if (context.Request.HttpMethod == "GET" && 
+                string.Equals(relativePath, "/txt", StringComparison.OrdinalIgnoreCase)||
+                string.Equals(relativePath, "/text", StringComparison.OrdinalIgnoreCase)||
+                string.Equals(relativePath, "/send", StringComparison.OrdinalIgnoreCase)
+                )
+            {
+                string htmlContent = GenerateTxtPageHtml();
+                byte[] buffer = Encoding.UTF8.GetBytes(htmlContent);
+                context.Response.ContentType = "text/html; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.Length;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+                UpdateLog($"[{clientIp}] Đã truy cập trang /txt.");
+                return;
+            }
+
+            if (context.Request.HttpMethod == "POST" && string.Equals(relativePath, "/txt", StringComparison.OrdinalIgnoreCase))
+            {
+                await HandleTxtData(context);
                 return;
             }
 
@@ -848,22 +905,6 @@ namespace ShareFile
                 .Replace("%21", "!")
                 .Replace("%40", "@")
                 .Replace("%2C", ",")
-                //.Replace("%20", "~")
-                //.Replace("%21", "!")
-                //.Replace("%40", "@")
-                //.Replace("%23", "~hash~");
-                //.Replace("%24", "$")
-                //.Replace("%25", "%")
-                //.Replace("%5E", "^")
-                //.Replace("%26", "&")
-                //.Replace("%28", "(")
-                //.Replace("%29", ")")
-                //.Replace("%60", "`")
-                //.Replace("%7E", "~")
-                //.Replace("%7B", "{")
-                //.Replace("%7D", "}")
-                //.Replace("%5B", "[")
-                //.Replace("%5D", "]");
                 ;
             // Encode URL
             return encoded;
@@ -890,25 +931,580 @@ namespace ShareFile
                 .Replace("!", "%21")
                 .Replace("@", "%40")
                 .Replace(",", "%2C")
-                //.Replace("~", "%20")
-                //.Replace("!", "%21")
-                //.Replace("@", "%40")
-                //.Replace("#", "%23")
-                //.Replace("$", "%24")
-                //.Replace("%", "%25")
-                //.Replace("^", "%5E")
-                //.Replace("&", "%26")
-                //.Replace("(", "%28")
-                //.Replace(")", "%29")
-                //.Replace("`", "%60")
-                //.Replace("~", "%7E")
-                //.Replace("{", "%7B")
-                //.Replace("}", "%7D")
-                //.Replace("[", "%5B")
-                //.Replace("]", "%5D");
                 ;
             // Decode URL
             return Uri.UnescapeDataString(decoded);
+        }
+        #endregion
+
+        #region INPUT COOORDINATES
+        private string GenerateConfirmPageHtml()
+        {
+            string html = $@"
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>NHẬP TỌA ĐỘ</title>
+                <meta name='viewport' content='width=device-width, initial-scale=1'>
+                <style>
+                    :root {{
+                        --primary-color: #007BFF;
+                        --background-color: #f0f2f5;
+                        --card-background: #fff;
+                        --border-color: #A9A9A9;
+                        --text-color: #333;
+                        --placeholder-color: #999;
+                        --shadow-color: rgba(0, 0, 0, 0.1);
+                        --keypad-color: #f8f9fa;
+                    }}
+                    body {{
+                        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                        background-color: var(--background-color);
+                        color: var(--text-color);
+                        padding: 20px;
+                        display: flex;
+                        justify-content: center;
+                        align-items: flex-start;
+                        min-height: 100vh;
+                        margin: 0;
+                        line-height: 1.5;
+                    }}
+                    .container {{
+                        background: var(--card-background);
+                        border-radius: 12px;
+                        box-shadow: 0 4px 20px var(--shadow-color);
+                        padding: 30px;
+                        width: 100%;
+                        max-width: 800px;
+                        box-sizing: border-box;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                    }}
+                    h1, h2 {{
+                        color: var(--primary-color);
+                        text-align: center;
+                        margin-top: 0;
+                    }}
+                    h1 {{ font-size: 2em; margin-bottom: 20px; }}
+                    h2 {{ font-size: 1.5em; margin-top: 20px; }}
+                    form {{
+                        width: 100%;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 20px;
+                        font-weight: bold;
+                        align-items: center; /* Căn giữa form */
+                    }}
+                    .form-group {{
+                        display: flex;
+                        flex-direction: column;
+                        width: 100%; /* Đảm bảo form-group chiếm toàn bộ chiều rộng của form */
+                        max-width: 500px; /* Giới hạn chiều rộng để trông cân đối hơn */
+                        align-items: center; /* Căn trái các phần tử bên trong */
+                    }}
+                    input[type='text'], input[type='number'], input[type='datetime-local'] {{padding: 12px;
+                        border: 2px solid var(--border-color); /* Đã đổi độ dày từ 1px thành 2px */
+                        border-radius: 8px;
+                        font-size: 1.2em;
+                        font-weight: bold;
+                        width: 100%;
+                        box-sizing: border-box;
+                        transition: border-color 0.3s, box-shadow 0.3s; /* Thêm box-shadow để làm nổi bật khi focus */
+                        text-align: center;
+                    }}
+                    /* ẨN MŨI TÊN TRONG INPUT TYPE=NUMBER (SPINNER BUTTONS) */
+                    input[type='number']::-webkit-inner-spin-button,
+                    input[type='number']::-webkit-outer-spin-button {{
+                        -webkit-appearance: none;
+                        margin: 0;
+                    }}
+                    input[type='number'] {{
+                        -moz-appearance: textfield;
+                    }}
+                    /* KẾT THÚC PHẦN ẨN MŨI TÊN */
+                    input:focus {{
+                        outline: none;
+                        border-color: var(--primary-color);
+                        box-shadow: 0 0 5px rgba(0, 123, 255, 0.5); /* Thêm hiệu ứng đổ bóng */
+                    }}
+                    .layout-container {{
+                        display: flex;
+                        flex-direction: row;
+                        gap: 30px;
+                        width: 100%;
+                        justify-content: center;
+                        align-items: flex-start;
+                    }}
+                    .coord-section {{
+                        flex: 1;
+                        display: flex;
+                        flex-direction: column;
+                        gap: 15px;
+                        width: 100%;
+                        max-width: 400px; /* Giới hạn chiều rộng để cân bằng với bàn phím */
+                    }}
+                    .input-pair {{
+                
+                        display: flex;
+                        flex-direction: column;
+                        gap: 5px;
+                    }}
+                    .input-pair label {{
+                        font-size: 0.9em;
+                        color: #555;
+                        text-align: center;
+                        font-weight: bold;
+                        font-size: 0.8em;
+                    }}
+                    .input-pair .coords {{
+                        display: flex;
+                        gap: 10px;
+                    }}
+                    .input-pair .coords input {{
+                        width: 50%; /* Cân đối chiều rộng của 2 ô input */
+                    }}                   
+                    .virtual-keyboard-section {{
+                        flex-shrink: 0;
+                        width: 200px;
+                        background-color: var(--keypad-color);
+                        border: 1px solid var(--border-color);
+                        border-radius: 12px;
+                        padding: 15px;
+                        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+                        margin-top: 20px; /* Dòng mới: Dịch chuyển bàn phím xuống dưới 20px */
+                    }}
+                    .virtual-keyboard {{
+                        display: grid;
+                        grid-template-columns: repeat(3, 1fr);
+                        gap: 10px;
+                        margin-top: 20px; /* Dòng mới: Dịch chuyển bàn phím xuống dưới 20px */
+                    }}
+                    .virtual-keyboard button {{
+                        padding: 15px;
+                        font-size: 1.2em;
+                        font-weight: bold;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        border: 1px solid #ccc;
+                        background-color: #fff;
+                        transition: background-color 0.1s, transform 0.1s;
+                    }}
+                    .virtual-keyboard button:active {{
+                        background-color: #ddd;
+                        transform: scale(0.95);
+                    }}
+                    /* Điều chỉnh cho nút 0 và Backspace */
+                    .virtual-keyboard .zero-key {{
+                        grid-column: span 1;
+                    }}
+                    .virtual-keyboard .backspace {{
+                        grid-column: span 2;
+                        background-color: #dc3545;
+                        color: white;
+                    }}
+                    .virtual-keyboard .backspace:active {{
+                        background-color: #c82333;
+                    }}
+                    .button-group {{
+                        display: flex;
+                        justify-content: center;
+                        gap: 35px;
+                        margin-top: 20px;
+                        flex-wrap: wrap;
+                    }}
+                    button {{
+                        padding: 12px 24px;
+                        font-size: 1em;
+                        font-weight: 500;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        border: none;
+                        font-weight: bold;
+                        transition: background-color 0.3s, transform 0.2s;
+                    }}
+                    button[type='submit'] {{
+                        background-color: var(--primary-color);
+                        color: #fff;
+                    }}
+                    button[type='submit']:hover {{
+                        background-color: #0056b3;
+                        transform: translateY(-2px);
+                    }}
+                    #resetBtn {{
+                        background-color: #EE7621;
+                        color: #fff;
+                    }}
+                    #resetBtn:hover {{
+                        background-color: #A0522D;
+                        transform: translateY(-2px);
+                    }}
+                    .message-box {{
+                        padding: 15px;
+                        border-radius: 8px;
+                        margin-top: 20px;
+                        text-align: left;
+                        font-weight: bold;
+                        display: none;
+                        font-size: 0.7em;
+                    }}
+                    .message-box.success {{
+                        background-color: #d4edda;
+                        color: #155724;
+                        border: 1px solid #c3e6cb;
+                    }}
+                    .message-box.error {{
+                        background-color: #f8d7da;
+                        color: #721c24;
+                        border: 1px solid #f5c6cb;
+                    }}                    
+                    @media (max-width: 768px) {{
+                        .layout-container {{
+                            flex-direction: column;
+                            align-items: center;
+                        }}
+                        .virtual-keyboard-section {{
+                            width: 100%;
+                            margin-top: 20px;
+                        }}
+                        .form-group, .coord-section {{
+                            max-width: 100%; /* Mở rộng trên màn hình nhỏ */
+                        }}
+                    }}
+                    .web-path-info {{
+                        font-size: 1.1em;
+                        font-weight: bold;
+                        color: #555;
+                        margin-bottom: 20px;
+                        text-align: center;
+                    }}
+                    ::placeholder {{
+                        text-align: center;
+                        font-size: 0.7em;
+                        color: var(--placeholder-color);
+                        opacity: 0.5;
+                    }}
+                    .footer {{background - color: red;
+                        color: Silver; /* Màu chữ Gray */
+                        font-size: 0.6em; /* Cỡ chữ 0.7em */
+                        font-style: italic; /* Kiểu chữ nghiêng */
+                        position: fixed;
+                        bottom: 0;
+                        width: 100%;
+                        text-align: center;
+                        z-index: 9999;  
+                    }}
+                    .coordinate-diagram-container {{
+                        width: 120px;
+                        height: 120px;
+                        margin: 20px auto;
+                        position: relative;
+                        border: 1px solid #ccc;
+                        background-color: #f9f9f9;
+                    }}
+                    .x-axis, .y-axis {{
+                        position: absolute;
+                        background-color: #EE0000;
+                    }}
+                    .x-axis {{
+                        bottom: 0;
+                        left: 0;
+                        width: 2px;
+                        height: 100%;
+                    }}
+                    .x-axis::after {{
+                        content: '';
+                        position: absolute;
+                        top: 0;
+                        left: -4px;
+                        width: 0;
+                        height: 0;
+                        border-left: 5px solid transparent;
+                        border-right: 5px solid transparent;
+                        border-bottom: 10px solid #CD0000;
+                    }}
+                    .y-axis {{
+                        bottom: 0;
+                        left: 0;
+                        height: 2px;
+                        width: 100%;
+                    }}
+                    .y-axis::after {{
+                        content: '';
+                        position: absolute;
+                        top: -4px;
+                        right: 0;
+                        width: 0;
+                        height: 0;
+                        border-top: 5px solid transparent;
+                        border-bottom: 5px solid transparent;
+                        border-left: 10px solid #008B00;
+                    }}
+                    .x-label {{
+                        position: absolute;
+                        top: -15px;
+                        left: -10px;
+                        font-weight: bold;
+                        color: #555;
+                        font-size: 0.8em;
+                    }}
+                    .y-label {{
+                        position: absolute;
+                        bottom: -15px;
+                        right: -10px;
+                        font-weight: bold;
+                        color: #555;
+                        font-size: 0.8em;
+                    }}
+                    .origin-label {{
+                        position: absolute;
+                        bottom: -15px;
+                        left: -10px;
+                        font-weight: bold;
+                        color: #555;
+                        font-size: 0.8em;
+                    }}
+                </style>
+            </head>
+            <body>
+                <div class='container'>
+                    <h1>NHẬP TỌA ĐỘ</h1>
+                <div class='coordinate-diagram-container'>
+                                <div class='x-axis'></div>
+                                <div class='y-axis'></div>
+                                <span class='origin-label'>0</span>
+                                <span class='x-label'>X</span>
+                                <span class='y-label'>Y</span>
+                            </div>                                                                                      
+                    <form id='confirmForm' action='/confirm' method='post'>
+                        <div class='form-group'>
+                            <label for='sAPN'>sAPN:</label>
+                            <input type='text' id='sAPN' name='sAPN' required placeholder='Nhập CELL ID hoặc sAPN tại đây...'>
+                        </div>
+                        <footer class='footer'>
+                            <p>Thiết kế bởi ®Nông Văn Phấn</p>
+                        </footer>
+                        <div class='layout-container'>
+                            <div class='coord-section'>
+                                <div id='coord-inputs'>
+                                </div>
+                            </div>
+                            <div class='virtual-keyboard-section'>
+                                <h2>Bàn phím số</h2>
+                                <div class='virtual-keyboard'>
+                                    <button type='button' data-value='7'>7</button>
+                                    <button type='button' data-value='8'>8</button>
+                                    <button type='button' data-value='9'>9</button>
+                                    <button type='button' data-value='4'>4</button>
+                                    <button type='button' data-value='5'>5</button>
+                                    <button type='button' data-value='6'>6</button>
+                                    <button type='button' data-value='1'>1</button>
+                                    <button type='button' data-value='2'>2</button>
+                                    <button type='button' data-value='3'>3</button>
+                                    <button type='button' data-value='0' class='zero-key'>0</button>
+                                    <button type='button' class='backspace' data-value='backspace'>⇤ Back</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class='button-group'>
+                            <button type='submit'>Lưu</button>
+                            <button type='button' id='resetBtn'>Reset</button>
+                        </div>
+                    </form>
+
+                    <div id='message-box' class='message-box'></div>
+
+                    <script>
+                        let activeInput = null;
+
+                        const form = document.getElementById('confirmForm');
+                        const resetBtn = document.getElementById('resetBtn');
+                        const coordInputsContainer = document.getElementById('coord-inputs');
+                        const messageBox = document.getElementById('message-box');
+                        const keypad = document.querySelector('.virtual-keyboard');
+                        const sAPNInput = document.getElementById('sAPN');
+
+                        function createCoordInputs() {{
+                            for(let i = 1; i <= 5; i++) {{
+                                const group = document.createElement('div');
+                                group.className = 'input-pair';
+                                group.innerHTML = `
+                                    <label>Tọa độ ${{i}}:</label>
+                                    <div class='coords'>
+                                        <input type='number' step='1' name='X${{i}}' id='X${{i}}' placeholder='X' class='coord-input'>
+                                        <input type='number' step='1' name='Y${{i}}' id='Y${{i}}' placeholder='Y' class='coord-input'>
+                                    </div>
+                                `;
+                                coordInputsContainer.appendChild(group);
+                            }}
+                        }}
+
+                        createCoordInputs();
+
+                        const coordInputs = document.querySelectorAll('.coord-input');
+                        coordInputs.forEach(input => {{
+                            input.addEventListener('focus', () => {{
+                                activeInput = input;
+                            }});
+                        }});
+
+                        sAPNInput.addEventListener('focus', () => {{
+                            activeInput = sAPNInput;
+                        }});
+
+                        // Xử lý khi nhấn Enter trên ô sAPN
+                        sAPNInput.addEventListener('keydown', (event) => {{
+                            if (event.key === 'Enter') {{
+                                event.preventDefault();
+                                document.getElementById('X1').focus();
+                            }}
+                        }});
+
+                        keypad.addEventListener('click', (event) => {{
+                            const target = event.target;
+                            if (target.tagName === 'BUTTON') {{
+                                const value = target.getAttribute('data-value');
+                                if (activeInput) {{
+                                    if (value === 'backspace') {{
+                                        activeInput.value = activeInput.value.slice(0, -1);
+                                    }} else {{
+                                        activeInput.value += value;
+                                    }}
+                                }}
+                            }}
+                        }});
+
+                        resetBtn.addEventListener('click', () => {{
+                            form.reset();
+                            messageBox.style.display = 'none';
+                            activeInput = null;
+                        }});
+
+                        form.addEventListener('submit', async (event) => {{
+                            event.preventDefault();
+                    
+                            messageBox.style.display = 'none';
+                    
+                            if (!sAPNInput.value) {{
+                                messageBox.textContent = 'Vui lòng nhập sAPN.';
+                                messageBox.className = 'message-box error';
+                                messageBox.style.display = 'block';
+                                sAPNInput.focus();
+                                return;
+                            }}
+
+                            const formData = new FormData(form);
+                            const data = Object.fromEntries(formData.entries());
+
+                            const response = await fetch('/confirm', {{
+                                method: 'POST',
+                                headers: {{ 'Content-Type': 'application/json' }},
+                                body: JSON.stringify(data)
+                            }});
+                    
+                            const result = await response.json();
+                    
+                            messageBox.innerHTML = result.message;
+                            messageBox.className = 'message-box ' + (response.ok ? 'success' : 'error');
+                            messageBox.style.display = 'block';
+                    
+                            // Thêm logic xóa dữ liệu và focus sau khi lưu thành công
+                            if (response.ok) {{
+                                form.reset();
+                                sAPNInput.focus();
+                            }}
+                        }});
+                    </script>
+                </div>  
+            </body>
+            </html>";
+            return html;
+        }
+
+        private async Task HandleConfirmData(HttpListenerContext context)
+        {
+            string clientIp = context.Request.RemoteEndPoint.Address.ToString();
+            int serverPort = context.Request.Url.Port;
+
+            try
+            {
+                using (var reader = new StreamReader(context.Request.InputStream, context.Request.ContentEncoding))
+                {
+                    string requestBody = await reader.ReadToEndAsync();
+                    var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(requestBody);
+
+                    // Lấy giá trị sAPN từ dữ liệu gửi lên
+                    string sAPN = data.ContainsKey("sAPN") ? data["sAPN"] : "unknown_sapn";
+
+                    // Tự động lấy thời gian hiện tại của máy chủ
+                    string formattedTime = DateTime.Now.ToString("dd-MM-yyyy HH:mm:ss");
+
+                    // Tạo danh sách giá trị, bắt đầu bằng sAPN
+                    var values = new List<string> { sAPN };
+
+                    // Thêm các cặp tọa độ vào danh sách
+                    for (int i = 1; i <= 5; i++)
+                    {
+                        string xKey = $"X{i}";
+                        string yKey = $"Y{i}";
+                        string xVal = data.ContainsKey(xKey) ? data[xKey] : "";
+                        string yVal = data.ContainsKey(yKey) ? data[yKey] : "";
+                        string combinedCoord = string.IsNullOrEmpty(xVal) && string.IsNullOrEmpty(yVal) ? "" : $"{xVal},{yVal}";
+                        values.Add($"\"{combinedCoord}\"");
+                    }
+
+                    // Thêm thời gian vào cuối danh sách
+                    values.Add(formattedTime);
+
+                    string csvLine = string.Join(";", values) + Environment.NewLine;
+
+                    string date = DateTime.Now.ToString("yyyyMMdd");
+                    string fileName = $"{clientIp}_Coordinates_{date}.csv";
+                    string filePath = Path.Combine(_sharedFolderPath, "DATA_CONFIRM", fileName);
+                    string directory = Path.GetDirectoryName(filePath);
+
+                    if (!Directory.Exists(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    if (!File.Exists(filePath))
+                    {
+                        // Cập nhật header, di chuyển cột 'Thời gian' ra cuối
+                        string header = "sAPN;X1 Y1;X2 Y2;X3 Y3;X4 Y4;X5 Y5;Thời gian\r\n";
+                        File.WriteAllText(filePath, header, Encoding.UTF8);
+                    }
+                    File.AppendAllText(filePath, csvLine, Encoding.UTF8);
+
+                    string webPath = $"http://{_localIP}:{serverPort}/DATA_CONFIRM/{fileName}";
+
+                    string message = $"Lưu thành công lúc {formattedTime}<br>Đường dẫn trên máy chủ:<br>{filePath}<br>Đường dẫn web: {webPath}";
+
+                    var responseData = new { message = message };
+                    string jsonResponse = System.Text.Json.JsonSerializer.Serialize(responseData);
+
+                    byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                    context.Response.ContentType = "application/json; charset=UTF-8";
+                    context.Response.ContentLength64 = buffer.LongLength;
+                    await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                    context.Response.OutputStream.Close();
+
+                    UpdateLog($"[{clientIp}] Đã lưu tọa độ vào file: {filePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                context.Response.StatusCode = 500;
+                var errorResponse = new { message = $"Lỗi khi xử lý dữ liệu: {ex.Message}" };
+                string jsonError = System.Text.Json.JsonSerializer.Serialize(errorResponse);
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonError);
+                context.Response.ContentType = "application/json; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.LongLength;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.OutputStream.Close();
+                UpdateLog($"[{clientIp}] Lỗi xử lý dữ liệu POST cho /confirm: {ex.Message}");
+            }
         }
         #endregion
 
@@ -1587,7 +2183,7 @@ namespace ShareFile
                         font-size: 0.9em;
                     }
                     .data-input-wrapper textarea {
-                        width: 95%;
+                        width: 70%;
                         padding: 5px 12px;
                         border-radius: 10px;
                         border: 1px solid #546a81;
@@ -1596,8 +2192,14 @@ namespace ShareFile
                         font-size: 1.5em;
                         box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
                         resize: vertical;
-                        min-height: 20px;
+                        min-height: 10px;
                         font-weight: bold; //Font chữ đậm
+                    }
+                    /* Thêm đoạn này vào để thay đổi font-size của placeholder */
+                    .data-input-wrapper textarea::placeholder {
+                        font-size: 0.8em;
+                        font-weight: normal;
+                        font-style: italic;
                     }
                     .data-input-wrapper textarea:focus {
                         outline: none;
@@ -1782,7 +2384,7 @@ namespace ShareFile
                     <div class='form-group'>
                         <div class='data-input-wrapper'>
                             <label for='dataInput'>Nhập dữ liệu để tạo mã:</label>
-                            <textarea id='dataInput' placeholder='Nhập dữ liệu để tạo mã...' rows='4'></textarea>
+                            <textarea id='dataInput' placeholder='Nhập dữ liệu để tạo mã...' rows='2'></textarea>
                         </div>
                     </div>
                     <div class='button-group'>
@@ -2012,6 +2614,12 @@ namespace ShareFile
                         min-height: 20px;
                         font-weight: bold;
                         box-sizing: border-box; /* Quan trọng để padding không làm hỏng width */
+                    }
+                    /* Chỉnh kích thước chữ cho placeholder */
+                    .data-input-wrapper textarea::placeholder {
+                        font-size: 0.8em; /* Giảm kích thước chữ */
+                        font-weight: normal; /* Đặt lại độ đậm */
+                        font-style: italic;
                     }
                     .button-group {
                         display: flex;
@@ -2252,6 +2860,9 @@ namespace ShareFile
 
             public string Filename { get; private set; }
             public string ContentType { get; private set; }
+
+            public string Name { get; private set; }
+            public string Value { get; private set; }
 
             public MultipartParser(Stream stream, string boundary, MainForm mainForm)
             {
@@ -2557,6 +3168,257 @@ namespace ShareFile
                 : "application/octet-stream";
         }
         #endregion
+
+        #region TRÌNH TẠO FILE TXT
+        private string GenerateTxtPageHtml()
+        {
+            var sb = new StringBuilder();
+            sb.Append("<!DOCTYPE html>");
+            sb.Append("<html lang='vi'>");
+            sb.Append("<head>");
+            sb.Append("<meta charset='UTF-8'>");
+            sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
+            sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
+            sb.Append("<title>Lưu File TXT - ShareFile</title>");
+            sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
+            sb.Append("<style>");
+            sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
+            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
+            sb.Append(".container { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
+            sb.Append(".header { text-align: center; margin-bottom: 20px; }");
+            sb.Append(".header h1 { font-size: 24px; color: #333; }");
+            sb.Append(".form-group { margin-bottom: 15px; }");
+            sb.Append("label { display: block; font-size: 14px; color: #555; margin-bottom: 5px; font-weight: bold; }");
+            sb.Append("textarea, input[type='text'] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-family: 'Segoe UI', Arial, sans-serif; transition: border-color 0.3s; }");
+            sb.Append("textarea:focus, input[type='text']:focus { border-color: #007bff; outline: none; }");
+            sb.Append("textarea { height: 500px; resize: vertical; }");
+            sb.Append(".button-group { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }");
+            sb.Append("button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-family: 'Segoe UI', Arial, sans-serif; transition: background-color 0.3s; flex: 1; min-width: 120px; max-width: 150px; }");
+            sb.Append("button:hover { background: #0056b3; }");
+            sb.Append("button:disabled { background: #ccc; cursor: not-allowed; }");
+            sb.Append(".btn-reset { background: #6c757d; }");
+            sb.Append(".btn-reset:hover { background: #5a6268; }");
+            sb.Append(".message { margin-top: 15px; padding: 10px; border-radius: 4px; font-size: 14px; text-align: center; display: none; }");
+            sb.Append(".success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }");
+            sb.Append(".error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }");
+            sb.Append("footer { text-align: center; margin-top: 20px; font-size: 8pt; color: #CCC; font-style: italic; }");
+            sb.Append("@media (max-width: 600px) { .container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } .button-group { flex-direction: column; gap: 5px; } button { width: 100%; max-width: none; } }");
+            sb.Append("</style>");
+            sb.Append("</head>");
+            sb.Append("<body>");
+            sb.Append("<div class='container'>");
+            sb.Append("<div class='header'><h1>Lưu File TXT</h1></div>");
+            sb.Append("<form id='txtForm' enctype='multipart/form-data'>");
+            sb.Append("<div class='form-group'>");
+            sb.Append("<label for='content'>Dán dữ liệu:</label>");
+            sb.Append("<textarea id='content' name='content' required></textarea>");
+            sb.Append("</div>");
+            sb.Append("<div class='form-group'>");
+            sb.Append("<label for='filename'>Tên file (không dấu, chỉ chữ cái và số):</label>");
+            sb.Append("<input type='text' id='filename' name='filename' pattern='[a-zA-Z0-9]+' required>");
+            sb.Append("</div>");
+            sb.Append("<div class='button-group'>");
+            sb.Append("<button type='submit'>Lưu File</button>");
+            sb.Append("<button type='button' class='btn-reset' onclick='document.getElementById(\"txtForm\").reset();'>Reset</button>");
+            sb.Append("</div>");
+            sb.Append("</form>");
+            sb.Append("<div id='message' class='message'></div>");
+            sb.Append("</div>");
+            sb.Append("<footer>© Nông Văn Phấn. All rights reserved.</footer>");
+            sb.Append("<script>");
+            sb.Append("if (!window.fetch) {");
+            sb.Append("  (function() {");
+            sb.Append("    window.fetch = function(url, options) {");
+            sb.Append("      return new Promise(function(resolve, reject) {");
+            sb.Append("        var xhr = new XMLHttpRequest();");
+            sb.Append("        xhr.open(options.method || 'GET', url);");
+            sb.Append("        xhr.onload = function() {");
+            sb.Append("          resolve({");
+            sb.Append("            ok: xhr.status >= 200 && xhr.status < 300,");
+            sb.Append("            status: xhr.status,");
+            sb.Append("            statusText: xhr.statusText,");
+            sb.Append("            json: function() { return Promise.resolve(JSON.parse(xhr.responseText)); },");
+            sb.Append("            text: function() { return Promise.resolve(xhr.responseText); }");
+            sb.Append("          });");
+            sb.Append("        };");
+            sb.Append("        xhr.onerror = function() { reject(new Error('Network error')); };");
+            sb.Append("        if (options.body instanceof FormData) {");
+            sb.Append("          xhr.setRequestHeader('Content-Type', 'multipart/form-data; boundary=' + options.body.boundary);");
+            sb.Append("          xhr.send(options.body);");
+            sb.Append("        } else {");
+            sb.Append("          xhr.send(options.body);");
+            sb.Append("        }");
+            sb.Append("      });");
+            sb.Append("    };");
+            sb.Append("  })();");
+            sb.Append("}");
+            sb.Append("document.getElementById('txtForm').addEventListener('submit', async function(event) {");
+            sb.Append("  event.preventDefault();");
+            sb.Append("  var form = this;");
+            sb.Append("  var formData = new FormData(form);");
+            sb.Append("  var message = document.getElementById('message');");
+            sb.Append("  message.style.display = 'none';");
+            sb.Append("  var submitBtn = form.querySelector('button[type=\"submit\"]');");
+            sb.Append("  submitBtn.disabled = true;");
+            sb.Append("  try {");
+            sb.Append("    var response = await fetch('/txt', {");
+            sb.Append("      method: 'POST',");
+            sb.Append("      body: formData");
+            sb.Append("    });");
+            sb.Append("    var result = await response.json();");
+            sb.Append("    if (response.ok) {");
+            sb.Append("      message.className = 'message success';");
+            sb.Append("      message.innerText = result.message;");
+            sb.Append("      form.reset();");
+            sb.Append("    } else {");
+            sb.Append("      message.className = 'message error';");
+            sb.Append("      message.innerText = 'Lỗi: ' + result.message;");
+            sb.Append("    }");
+            sb.Append("    message.style.display = 'block';");
+            sb.Append("  } catch (error) {");
+            sb.Append("    message.className = 'message error';");
+            sb.Append("    message.innerText = 'Lỗi: ' + error.message;");
+            sb.Append("    message.style.display = 'block';");
+            sb.Append("  } finally {");
+            sb.Append("    submitBtn.disabled = false;");
+            sb.Append("  }");
+            sb.Append("});");
+            sb.Append("</script>");
+            sb.Append("</body></html>");
+            return sb.ToString();
+        }
+
+        private static readonly object fileLock = new object();
+        private async Task HandleTxtData(HttpListenerContext context)
+        {
+            string clientIp = context.Request.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+            try
+            {
+                var request = context.Request;
+                UpdateLog($"[{clientIp}] Nhận yêu cầu POST /txt, Content-Type: {request.ContentType}, Content-Length: {request.ContentLength64}");
+
+                if (!request.HasEntityBody || request.ContentLength64 == 0)
+                {
+                    await SendErrorResponse(context, 400, "Không có dữ liệu được gửi.");
+                    UpdateLog($"[{clientIp}] Không có dữ liệu được gửi.", true);
+                    return;
+                }
+
+                if (!request.ContentType.Contains("multipart/form-data"))
+                {
+                    await SendErrorResponse(context, 400, $"Content-Type phải là multipart/form-data, nhận được: {request.ContentType}");
+                    UpdateLog($"[{clientIp}] Content-Type không hợp lệ: {request.ContentType}", true);
+                    return;
+                }
+
+                string boundary = GetBoundary(request.ContentType);
+                if (string.IsNullOrEmpty(boundary))
+                {
+                    await SendErrorResponse(context, 400, "Thiếu boundary trong Content-Type.");
+                    UpdateLog($"[{clientIp}] Thiếu boundary trong Content-Type.", true);
+                    return;
+                }
+
+                string txtDir = Path.Combine(_sharedFolderPath, "Text_Doccument");
+                if (!Directory.Exists(txtDir))
+                {
+                    Directory.CreateDirectory(txtDir);
+                    UpdateLog($"[{clientIp}] Đã tạo thư mục Text_Doccument: {txtDir}");
+                }
+
+                // Kiểm tra quyền ghi
+                try
+                {
+                    string testFile = Path.Combine(txtDir, "test_" + Guid.NewGuid().ToString() + ".txt");
+                    File.WriteAllText(testFile, "test", Encoding.UTF8);
+                    File.Delete(testFile);
+                    UpdateLog($"[{clientIp}] Kiểm tra quyền ghi vào {txtDir}: Thành công");
+                }
+                catch (Exception ex)
+                {
+                    await SendErrorResponse(context, 500, $"Không thể ghi vào thư mục: {ex.Message}");
+                    UpdateLog($"[{clientIp}] Lỗi quyền ghi vào {txtDir}: {ex.Message}", true);
+                    return;
+                }
+
+                // Parse multipart/form-data thủ công để lấy content và filename
+                var data = new Dictionary<string, string>();
+                using (var reader = new StreamReader(request.InputStream, Encoding.UTF8))
+                {
+                    string content = await reader.ReadToEndAsync();
+                    string[] parts = content.Split(new[] { "--" + boundary }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var part in parts)
+                    {
+                        if (part.Contains("name=\"content\""))
+                        {
+                            var valueStart = part.IndexOf("\r\n\r\n") + 4;
+                            if (valueStart < part.Length)
+                            {
+                                data["content"] = part.Substring(valueStart).TrimEnd('\r', '\n', '-');
+                                UpdateLog($"[{clientIp}] Nhận trường: content = {data["content"].Substring(0, Math.Min(data["content"].Length, 50))}...");
+                            }
+                        }
+                        else if (part.Contains("name=\"filename\""))
+                        {
+                            var valueStart = part.IndexOf("\r\n\r\n") + 4;
+                            if (valueStart < part.Length)
+                            {
+                                data["filename"] = part.Substring(valueStart).TrimEnd('\r', '\n', '-');
+                                UpdateLog($"[{clientIp}] Nhận trường: filename = {data["filename"]}");
+                            }
+                        }
+                    }
+                }
+
+                if (!data.ContainsKey("content") || !data.ContainsKey("filename"))
+                {
+                    await SendErrorResponse(context, 400, "Thiếu trường content hoặc filename.");
+                    UpdateLog($"[{clientIp}] Thiếu trường content hoặc filename. Data: {string.Join(", ", data.Keys)}", true);
+                    return;
+                }
+
+                string filename = GetSafeFilename(data["filename"]) + ".txt";
+                string fullPath = Path.Combine(txtDir, filename);
+
+                if (File.Exists(fullPath))
+                {
+                    int counter = 1;
+                    string baseName = Path.GetFileNameWithoutExtension(filename);
+                    while (File.Exists(fullPath))
+                    {
+                        filename = $"{baseName}_{counter}.txt";
+                        fullPath = Path.Combine(txtDir, filename);
+                        counter++;
+                    }
+                }
+
+                lock (fileLock)
+                {
+                    File.WriteAllText(fullPath, data["content"], Encoding.UTF8);
+                    UpdateLog($"[{clientIp}] Đã lưu file TXT với mã hóa UTF-8: {fullPath}");
+                }
+
+                // Tạo phản hồi JSON đơn giản
+                var responseData = new
+                {
+                    message = "Đã lưu file thành công!"
+                };
+                string jsonResponse = System.Text.Json.JsonSerializer.Serialize(responseData);
+                byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
+                context.Response.StatusCode = 200;
+                context.Response.ContentType = "application/json; charset=UTF-8";
+                context.Response.ContentLength64 = buffer.Length;
+                await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                context.Response.Close();
+            }
+            catch (Exception ex)
+            {
+                await SendErrorResponse(context, 500, $"Lỗi khi lưu file TXT: {ex.Message}");
+                UpdateLog($"[{clientIp}] Lỗi khi lưu file TXT: {ex.Message}", true);
+            }
+        }
+#endregion
+
         private void StopSharing()
         {
             if (_listener != null && _listener.IsListening)
@@ -2618,7 +3480,6 @@ namespace ShareFile
         }
         #region Phương thức UpdateLog &  CleanupLogs
         //Phương thức này sẽ tạo một file log mới mỗi ngày, với tên có định dạng log_yyyy-MM-dd.txt
-
         private void UpdateLog(string message, bool isError = false)
         {
             string prefix = isError ? "❖ [!] " : "• ";
@@ -2816,147 +3677,6 @@ namespace ShareFile
             }
         }
 
-        #region Phương thức GetFileIcon
-        private string GetFileIcon(string fileExtension)
-        {
-            fileExtension = fileExtension.ToLower();
-            switch (fileExtension)
-            {
-                case ".pdf":
-                    return "📕"; // Sách đỏ cho file PDF
-                case ".doc":
-                case ".docx":
-                    return "📝"; // Ghi chú cho file Word
-                case ".xls":
-                case ".xlsx":
-                    return "📊"; // Biểu đồ cho file Excel
-                case ".ppt":
-                case ".pptx":
-                    return "📈"; // Biểu đồ tăng cho file PowerPoint
-                case ".jpg":
-                case ".jpeg":
-                case ".png":
-                case ".gif":
-                case ".bmp":
-                    return "🖼️"; // Khung ảnh cho file ảnh
-                case ".zip":
-                case ".rar":
-                case ".7z":
-                    return "📦"; // Hộp cho file nén
-                case ".mp3":
-                case ".wav":
-                case ".flac":
-                    return "🎵"; // Nốt nhạc cho file âm thanh
-                case ".mp4":
-                case ".avi":
-                case ".mov":
-                    return "🎬"; // Máy quay cho file video
-                case ".txt":
-                    return "🗒️"; // Cuộn giấy cho file văn bản
-                case ".html":
-                case ".htm":
-                    return "🌐"; // Địa cầu cho file web
-                case ".cs":
-                case ".js":
-                case ".json":
-                case ".xml":
-                case ".css":
-                    return "💻"; // Máy tính cho file code
-                case ".exe":
-                    return "⚙️"; // Bánh răng cho file thực thi
-
-                // Thêm các định dạng file phổ biến khác
-                case ".py":
-                    return "🐍"; // Rắn cho file Python
-                case ".java":
-                    return "☕"; // Tách cà phê cho file Java
-                case ".c":
-                case ".cpp":
-                case ".h":
-                    return "🔧"; // Cờ lê cho file C/C++
-                case ".php":
-                    return "🐘"; // Voi cho file PHP
-                case ".sql":
-                    return "🗄️"; // Tủ tài liệu cho file SQL
-                case ".md":
-                    return "📋"; // Bảng ghi chú cho Markdown
-                case ".csv":
-                    return "📊"; // Biểu đồ cho file CSV
-                case ".rtf":
-                    return "📄"; // Tài liệu cho file RTF
-                case ".log":
-                    return "📜"; // Cuộn giấy cho file log
-                case ".psd":
-                case ".ai":
-                    return "🎨"; // Bảng màu cho file thiết kế
-                case ".svg":
-                    return "🖌️"; // Cọ vẽ cho file SVG
-                case ".ttf":
-                case ".otf":
-                case ".woff":
-                    return "🔤"; // Chữ cái cho file font
-                case ".eml":
-                case ".msg":
-                    return "✉️"; // Thư cho file email
-                case ".ics":
-                    return "📅"; // Lịch cho file calendar
-                case ".torrent":
-                    return "⬇️"; // Mũi tên xuống cho file torrent
-                case ".iso":
-                case ".img":
-                case ".dmg":
-                    return "💿"; // Đĩa CD cho file disk image
-                case ".db":
-                case ".sqlite":
-                    return "🗃️"; // Thẻ chỉ mục cho file database
-                case ".bak":
-                    return "💾"; // Đĩa mềm cho file backup
-                case ".ini":
-                case ".cfg":
-                    return "⚙️"; // Bánh răng cho file cấu hình
-                case ".cer":
-                case ".crt":
-                case ".pem":
-                    return "🔒"; // Khóa cho file certificate
-                case ".pkey":
-                case ".key":
-                    return "🔑"; // Chìa khóa cho file key
-                case ".apk":
-                    return "📱"; // Điện thoại cho file APK
-                case ".dll":
-                    return "🧩"; // Mảnh ghép cho file DLL
-                case ".bat":
-                    return "🦇"; // Dơi cho file BAT
-                case ".sh":
-                    return "🔧"; // Cờ lê cho file shell
-                case ".jar":
-                case ".war":
-                    return "☕"; // Tách cà phê cho file Java archive
-                case ".swf":
-                case ".fla":
-                    return "🎬"; // Máy quay cho file Flash
-                case ".raw":
-                case ".cr2":
-                case ".nef":
-                case ".arw":
-                    return "📷"; // Máy ảnh cho file RAW
-                case ".dwg":
-                case ".dxf":
-                    return "📐"; // Thước kẻ cho file CAD
-                case ".stl":
-                    return "🖨️"; // Máy in 3D cho file STL
-                case ".step":
-                case ".stp":
-                    return "🏗️"; // Công trường xây dựng cho file STEP
-                case ".gcode":
-                    return "🖨️"; // Máy in 3D cho file G-code
-
-                default:
-                    return "🗎"; // Ký hiệu chung cho các file khác
-            }
-        }
-        #endregion
-
         #region File Explore
         private string GenerateWebDAVPropFindResponse(string directoryPath, string relativePath)
         {
@@ -3083,6 +3803,7 @@ namespace ShareFile
             sb.Append("a{text-decoration:none; color:#0366d6;}");
             sb.Append("a:hover{text-decoration:underline;}");
             sb.Append("h2 { font-size: 18px; font-family: 'Roboto',Segoe UI, Arial, sans-serif;}");
+            sb.Append("footer { text-align: center; margin-top: 20px; font-size: 8pt; color: #CCC; font-style: italic; }");
             sb.Append("</style>");
             sb.Append("</head>");
             sb.Append("<body>");
@@ -3101,8 +3822,6 @@ namespace ShareFile
 
                 sb.Append("<tr>");
                 sb.AppendFormat("<td colspan=\"4\"><a href=\"{0}\">↩ Quay lại</a></td>", encodedParent);
-                //string backIcon = GetIconBase64("..", true); // Lấy icon cho thư mục
-                //sb.AppendFormat("<td colspan=\"4\"><a href=\"{0}\"><img src=\"{1}\" style=\"width:16px; height:16px; vertical-align:middle;\" /> Quay lại</a></td>", encodedParent, backIcon);
                 sb.Append("</tr>");
             }
 
@@ -3115,7 +3834,6 @@ namespace ShareFile
                 DirectoryInfo di = new DirectoryInfo(dir);
 
                 sb.Append("<tr>");
-                //sb.AppendFormat("<td><a href=\"{0}\">📁 {1}</a></td>", encodedPath, WebUtility.HtmlEncode(dirName));
                 string folderIcon = GetIconBase64(dir, true);
                 sb.AppendFormat("<td><a href=\"{0}\"><img src=\"{1}\" style=\"width:16px; height:16px; vertical-align:middle;\" /> {2}</a></td>", encodedPath, folderIcon, WebUtility.HtmlEncode(dirName));
                 sb.AppendFormat("<td>{0}</td>", di.LastWriteTime.ToString("dd/MM/yyyy HH:mm:ss"));
@@ -3142,9 +3860,9 @@ namespace ShareFile
                 sb.AppendFormat("<td>{0}</td>", sizeStr);
                 sb.Append("</tr>");
             }
-
             sb.Append("</table>");
-            sb.Append("</main>");
+            sb.Append("</main>");           
+            sb.Append("<footer>© Nông Văn Phấn. All rights reserved.</footer>");
             sb.Append("</body></html>");
             return sb.ToString();
         }
@@ -3182,7 +3900,7 @@ namespace ShareFile
             sb.Append(".file-remove { background: #dc3545; color: white; border: none; border-radius: 4px; padding: 5px 10px; cursor: pointer; }");
             sb.Append(".button-group { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }");
             sb.Append(".btn { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }");
-            sb.Append(".btn:disabled { background: #ccc; cursor: not-allowed; }");
+            sb.Append(".btn:disabled { background: #ccc; cursor: not-allowed; }");                       
             sb.Append(".btn-secondary { background: #6c757d; }");
             sb.Append(".progress-container { margin-top: 15px; display: none; }");
             sb.Append(".progress-label { font-size: 12px; color: #333; margin-bottom: 5px; text-align: center; }");
@@ -3191,11 +3909,11 @@ namespace ShareFile
             sb.Append(".status-message { padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 14px; text-align: center; display: none; }");
             sb.Append(".status-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }");
             sb.Append(".status-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }");
+            sb.Append("footer { text-align: center; margin-top: 20px; font-size: 8pt; color: #CCC; font-style: italic; }");
             sb.Append("@media (max-width: 600px) { .upload-container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } }");
             sb.Append("</style>");
             sb.Append("</head>");
-
-            sb.Append("<body>");
+            sb.Append("<body>");           
             sb.Append("<div class='upload-container'>");
             sb.Append("<div class='header'><h1>Tải lên tập tin</h1></div>");
             sb.Append("<div id='statusMessage' class='status-message'></div>");
@@ -3215,7 +3933,7 @@ namespace ShareFile
             sb.Append("<div class='progress'><div id='progressBar' class='progress-bar'></div></div>");
             sb.Append("</div>");
             sb.Append("</div>");
-
+            sb.Append("<footer>© Nông Văn Phấn. All rights reserved.</footer>");
             sb.Append("<script>");
             sb.Append("(function() {");
             sb.Append("  var fileInput = document.getElementById('fileInput');");
@@ -3227,14 +3945,12 @@ namespace ShareFile
             sb.Append("  var progressBar = document.getElementById('progressBar');");
             sb.Append("  var statusMessage = document.getElementById('statusMessage');");
             sb.Append("  var selectedFiles = [];");
-
             sb.Append("  function showStatus(message, type) {");
             sb.Append("    statusMessage.innerHTML = message;");
             sb.Append("    statusMessage.className = 'status-message status-' + type;");
             sb.Append("    statusMessage.style.display = 'block';");
             sb.Append("    setTimeout(function() { statusMessage.style.display = 'none'; }, 5000);");
             sb.Append("  }");
-
             sb.Append("  function formatFileSize(bytes) {");
             sb.Append("    if (bytes === 0) return '0 B';");
             sb.Append("    var k = 1024, sizes = ['B', 'KB', 'MB', 'GB'], i = Math.floor(Math.log(bytes) / Math.log(k));");
@@ -3405,6 +4121,7 @@ namespace ShareFile
             sb.Append(".button-upload:hover { background: #218838; }");
             sb.Append(".button-back { background: #007bff; color: #fff; }");
             sb.Append(".button-back:hover { background: #0056b3; }");
+            sb.Append("footer { text-align: center; margin-top: 20px; font-size: 8pt; color: #CCC; font-style: italic; }");
             sb.Append("@media (max-width: 600px) { .container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } .button { display: block; margin: 10px auto; width: 80%; } }");
             sb.Append("</style>");
             sb.Append("</head>");
@@ -3445,6 +4162,7 @@ namespace ShareFile
             sb.Append("<a href='/' class='button button-back'>Quay lại thư mục chính</a>");
             sb.Append("</div>");
             sb.Append("</div>");
+            sb.Append("<footer>© Nông Văn Phấn. All rights reserved.</footer>");
             sb.Append("</body></html>");
 
             return sb.ToString();
