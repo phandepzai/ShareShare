@@ -434,7 +434,7 @@ namespace ShareFile
             StopSharing();
         }
 
-
+        #region KHOI DONG SEVER
         private void StartServer(int port)
         {
             // Đảm bảo ngăn sleep đã được kích hoạt
@@ -536,6 +536,7 @@ namespace ShareFile
                 StopSharing();
             }
         }
+        #endregion
 
         #region PROCESS_REQUEST
         private async Task ProcessRequest(HttpListenerContext context)
@@ -3179,35 +3180,37 @@ namespace ShareFile
             sb.Append("<meta charset='UTF-8'>");
             sb.Append("<meta http-equiv='X-UA-Compatible' content='IE=edge'>");
             sb.Append("<meta name='viewport' content='width=device-width, initial-scale=1.0'>");
-            sb.Append("<title>Lưu File TXT - ShareFile</title>");
+            sb.Append("<title>TẠO FILE TXT - ShareFile</title>");
             sb.Append("<link rel='icon' type='image/x-icon' href='/favicon.ico'>");
             sb.Append("<style>");
             sb.Append("* { box-sizing: border-box; margin: 0; padding: 0; }");
-            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; min-height: 100vh; padding: 20px; }");
-            sb.Append(".container { background: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); max-width: 600px; margin: 20px auto; padding: 20px; }");
+            sb.Append("body { font-family: 'Segoe UI', Arial, sans-serif; background: #121212; color: #e0e0e0; min-height: 100vh; padding: 20px; }");
+            sb.Append(".container { background: #1e1e1e; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); max-width: 600px; margin: 20px auto; padding: 20px; }");
             sb.Append(".header { text-align: center; margin-bottom: 20px; }");
-            sb.Append(".header h1 { font-size: 24px; color: #333; }");
+            sb.Append(".header h1 { font-size: 24px; color: #e0e0e0; }");
             sb.Append(".form-group { margin-bottom: 15px; }");
-            sb.Append("label { display: block; font-size: 14px; color: #555; margin-bottom: 5px; font-weight: bold; }");
-            sb.Append("textarea, input[type='text'] { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; font-family: 'Segoe UI', Arial, sans-serif; transition: border-color 0.3s; }");
-            sb.Append("textarea:focus, input[type='text']:focus { border-color: #007bff; outline: none; }");
+            sb.Append("label { display: block; font-size: 14px; color: #b0b0b0; margin-bottom: 5px; font-weight: bold; }");
+            sb.Append("textarea, input[type='text'] { width: 100%; padding: 10px; border: 1px solid #444; background: #2a2a2a; color: #e0e0e0; border-radius: 4px; font-size: 14px; font-family: 'Segoe UI', Arial, sans-serif; transition: border-color 0.3s; }");
+            sb.Append("textarea:focus, input[type='text']:focus { border-color: #00aaff; outline: none; }");
             sb.Append("textarea { height: 500px; resize: vertical; }");
             sb.Append(".button-group { display: flex; gap: 10px; justify-content: center; margin-top: 15px; }");
-            sb.Append("button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-family: 'Segoe UI', Arial, sans-serif; transition: background-color 0.3s; flex: 1; min-width: 120px; max-width: 150px; }");
-            sb.Append("button:hover { background: #0056b3; }");
-            sb.Append("button:disabled { background: #ccc; cursor: not-allowed; }");
-            sb.Append(".btn-reset { background: #6c757d; }");
-            sb.Append(".btn-reset:hover { background: #5a6268; }");
+            sb.Append("button { background: #00aaff; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'Segoe UI', Arial, sans-serif; transition: background-color 0.3s; flex: 1; min-width: 100px; max-width: 130px; }");
+            sb.Append("button:hover { background: #0088cc; }");
+            sb.Append("button:disabled { background: #444; cursor: not-allowed; }");
+            sb.Append(".btn-reset { background: #555; }");
+            sb.Append(".btn-reset:hover { background: #777; }");
             sb.Append(".message { margin-top: 15px; padding: 10px; border-radius: 4px; font-size: 14px; text-align: center; display: none; }");
-            sb.Append(".success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }");
-            sb.Append(".error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }");
-            sb.Append("footer { text-align: center; margin-top: 20px; font-size: 8pt; color: #CCC; font-style: italic; }");
+            sb.Append(".success { background: #1c522e; color: #d4edda; border: 1px solid #28a745; }");
+            sb.Append(".error { background: #641a20; color: #f8d7da; border: 1px solid #dc3545; }");
+            sb.Append(".btn-open { background: #28a745; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: 'Segoe UI', Arial, sans-serif; transition: background-color 0.3s; text-decoration: none; flex: 1; min-width: 100px; max-width: 130px; text-align: center; }");
+            sb.Append(".btn-open:hover { background: #218838; }");
+            sb.Append("footer { text-align: center; margin-top: 20px; font-size: 8pt; color: #777; font-style: italic; }");
             sb.Append("@media (max-width: 600px) { .container { margin: 10px; padding: 15px; } .header h1 { font-size: 20px; } .button-group { flex-direction: column; gap: 5px; } button { width: 100%; max-width: none; } }");
             sb.Append("</style>");
             sb.Append("</head>");
             sb.Append("<body>");
             sb.Append("<div class='container'>");
-            sb.Append("<div class='header'><h1>Lưu File TXT</h1></div>");
+            sb.Append("<div class='header'><h1>TẠO FILE TXT</h1></div>");
             sb.Append("<form id='txtForm' enctype='multipart/form-data'>");
             sb.Append("<div class='form-group'>");
             sb.Append("<label for='content'>Dán dữ liệu:</label>");
@@ -3223,6 +3226,9 @@ namespace ShareFile
             sb.Append("</div>");
             sb.Append("</form>");
             sb.Append("<div id='message' class='message'></div>");
+            sb.Append("<div id='openFileGroup' class='button-group' style='display: none;'>");
+            sb.Append("<a href='#' id='openFileLink' target='_blank' class='btn-open'>Mở File</a>");
+            sb.Append("</div>");
             sb.Append("</div>");
             sb.Append("<footer>© Nông Văn Phấn. All rights reserved.</footer>");
             sb.Append("<script>");
@@ -3237,51 +3243,59 @@ namespace ShareFile
             sb.Append("            ok: xhr.status >= 200 && xhr.status < 300,");
             sb.Append("            status: xhr.status,");
             sb.Append("            statusText: xhr.statusText,");
-            sb.Append("            json: function() { return Promise.resolve(JSON.parse(xhr.responseText)); },");
-            sb.Append("            text: function() { return Promise.resolve(xhr.responseText); }");
+            sb.Append("            json: function() { return JSON.parse(xhr.responseText); },");
+            sb.Append("            text: function() { return xhr.responseText; }");
             sb.Append("          });");
             sb.Append("        };");
             sb.Append("        xhr.onerror = function() { reject(new Error('Network error')); };");
             sb.Append("        if (options.body instanceof FormData) {");
-            sb.Append("          xhr.setRequestHeader('Content-Type', 'multipart/form-data; boundary=' + options.body.boundary);");
             sb.Append("          xhr.send(options.body);");
             sb.Append("        } else {");
+            sb.Append("          if (options.headers && options.headers['Content-Type']) {");
+            sb.Append("            xhr.setRequestHeader('Content-Type', options.headers['Content-Type']);");
+            sb.Append("          }");
             sb.Append("          xhr.send(options.body);");
             sb.Append("        }");
             sb.Append("      });");
             sb.Append("    };");
             sb.Append("  })();");
             sb.Append("}");
-            sb.Append("document.getElementById('txtForm').addEventListener('submit', async function(event) {");
+            sb.Append("document.getElementById('txtForm').addEventListener('submit', function(event) {");
             sb.Append("  event.preventDefault();");
             sb.Append("  var form = this;");
             sb.Append("  var formData = new FormData(form);");
             sb.Append("  var message = document.getElementById('message');");
+            sb.Append("  var openFileGroup = document.getElementById('openFileGroup');");
+            sb.Append("  var openFileLink = document.getElementById('openFileLink');");
             sb.Append("  message.style.display = 'none';");
+            sb.Append("  openFileGroup.style.display = 'none';");
             sb.Append("  var submitBtn = form.querySelector('button[type=\"submit\"]');");
             sb.Append("  submitBtn.disabled = true;");
-            sb.Append("  try {");
-            sb.Append("    var response = await fetch('/txt', {");
-            sb.Append("      method: 'POST',");
-            sb.Append("      body: formData");
+            sb.Append("  fetch('/txt', {");
+            sb.Append("    method: 'POST',");
+            sb.Append("    body: formData");
+            sb.Append("  }).then(function(response) {");
+            sb.Append("    return response.json().then(function(result) {");
+            sb.Append("      if (response.ok) {");
+            sb.Append("        message.className = 'message success';");
+            sb.Append("        message.innerText = result.message;");
+            sb.Append("        form.reset();");
+            sb.Append("        if (result.fileUrl) {");
+            sb.Append("          openFileLink.href = result.fileUrl;");
+            sb.Append("          openFileGroup.style.display = 'flex';");
+            sb.Append("        }");
+            sb.Append("      } else {");
+            sb.Append("        message.className = 'message error';");
+            sb.Append("        message.innerText = 'Lỗi: ' + result.message;");
+            sb.Append("      }");
             sb.Append("    });");
-            sb.Append("    var result = await response.json();");
-            sb.Append("    if (response.ok) {");
-            sb.Append("      message.className = 'message success';");
-            sb.Append("      message.innerText = result.message;");
-            sb.Append("      form.reset();");
-            sb.Append("    } else {");
-            sb.Append("      message.className = 'message error';");
-            sb.Append("      message.innerText = 'Lỗi: ' + result.message;");
-            sb.Append("    }");
-            sb.Append("    message.style.display = 'block';");
-            sb.Append("  } catch (error) {");
+            sb.Append("  }).catch(function(error) {");
             sb.Append("    message.className = 'message error';");
             sb.Append("    message.innerText = 'Lỗi: ' + error.message;");
+            sb.Append("  }).finally(function() {");
             sb.Append("    message.style.display = 'block';");
-            sb.Append("  } finally {");
             sb.Append("    submitBtn.disabled = false;");
-            sb.Append("  }");
+            sb.Append("  });");
             sb.Append("});");
             sb.Append("</script>");
             sb.Append("</body></html>");
@@ -3326,7 +3340,6 @@ namespace ShareFile
                     UpdateLog($"[{clientIp}] Đã tạo thư mục Text_Doccument: {txtDir}");
                 }
 
-                // Kiểm tra quyền ghi
                 try
                 {
                     string testFile = Path.Combine(txtDir, "test_" + Guid.NewGuid().ToString() + ".txt");
@@ -3341,7 +3354,6 @@ namespace ShareFile
                     return;
                 }
 
-                // Parse multipart/form-data thủ công để lấy content và filename
                 var data = new Dictionary<string, string>();
                 using (var reader = new StreamReader(request.InputStream, Encoding.UTF8))
                 {
@@ -3398,10 +3410,10 @@ namespace ShareFile
                     UpdateLog($"[{clientIp}] Đã lưu file TXT với mã hóa UTF-8: {fullPath}");
                 }
 
-                // Tạo phản hồi JSON đơn giản
                 var responseData = new
                 {
-                    message = "Đã lưu file thành công!"
+                    message = "Đã lưu file thành công!",
+                    fileUrl = "/Text_Doccument/" + Uri.EscapeDataString(filename)
                 };
                 string jsonResponse = System.Text.Json.JsonSerializer.Serialize(responseData);
                 byte[] buffer = Encoding.UTF8.GetBytes(jsonResponse);
@@ -3417,7 +3429,7 @@ namespace ShareFile
                 UpdateLog($"[{clientIp}] Lỗi khi lưu file TXT: {ex.Message}", true);
             }
         }
-#endregion
+        #endregion
 
         private void StopSharing()
         {
